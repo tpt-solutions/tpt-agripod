@@ -1,0 +1,122 @@
+Design Specification: Project Agripod
+Version: 1.0.0
+Maintainer: Solo (TPT Solutions)
+Core Philosophy: Software-defined, physics-informed, modular controlled environment agriculture (CEA).
+1. Executive Summary
+Agripod is a standardized, shipping-container-scale (or modular warehouse bay) agricultural system. Instead of building custom hardware for every crop, Agripod treats the physical environment as a configurable runtime. By abstracting crop requirements into formal constraints (VPD, root depth, photoperiod, thermal mass), the same physical chassis can grow root vegetables, vine crops, or leafy greens simply by loading a different "Crop Profile" and swapping modular grow cartridges.
+2. Target Crop Archetypes (The Top 10)
+To prove genericity, the system is designed around 10 distinct morphological and environmental archetypes, covering global staples and high-value NZ crops:
+#
+Crop
+Root Architecture
+Canopy / Growth Habit
+Key System Requirement
+1
+Potatoes
+Deep, expanding tubers
+Medium, bushy
+Deep substrate (30cm+), hilling capability, cool root zone.
+2
+Carrots
+Deep, rigid taproot
+Low, feathery
+Fine, uncompacted substrate (pumice grit), precise automated seeding.
+3
+Tomatoes
+Deep, fibrous
+Indeterminate vine (tall)
+Heavy vertical trellising, high light (DLI), aggressive dehumidification.
+4
+Leafy Greens
+Shallow, fibrous
+Low, rosette
+Shallow trays (5-10cm), fast turnover, NFT/DWC compatible.
+5
+Strawberries
+Shallow, crown-based
+Low, trailing
+Elevated gutters, strict VPD control (0.8–1.0 kPa) to prevent botrytis.
+6
+Onions
+Shallow-to-medium bulb
+Low, tubular
+Specific photoperiod triggering (day-length control), dry curing phase.
+7
+Cucumbers
+Medium, fibrous
+Rapid indeterminate vine
+High transpiration management, heavy trellis load, high humidity tolerance.
+8
+Bell Peppers
+Medium, fibrous
+Medium, bushy
+Stable temperature gradients, long cycle, high potassium demand.
+9
+Kumara (Sweet Potato)
+Deep, expanding tubers
+Aggressive vining
+Warm root zone (20°C+), bi-directional vertical vine spooling.
+10
+Microgreens/Herbs
+Ultra-shallow
+Ultra-low, dense
+Ultra-fast cycle (7-14 days), high-density flooding/drainage.
+3. Physical Architecture (The Hardware Cartridge)
+The physical system is decoupled into swappable modules, allowing a solo maintainer to iterate on one subsystem without breaking the others.
+3.1. The Chassis & Envelope
+Format: 20ft or 40ft High Cube (or equivalent warehouse bay framing).
+Insulation: R-30+ closed-cell spray foam or rigid PIR panels to eliminate thermal bridging and condensation.
+Airflow: Positive pressure filtration (HEPA MERV-13) to prevent pest/disease ingress.
+3.2. Modular Grow Cartridges (The "Variable")
+Instead of fixed beds, the floor features standardized heavy-duty roller rails. Cartridges slide in/out for maintenance or harvesting.
+Type A (Deep Substrate): 40cm deep troughs with mesh-bottom sifting for potatoes/carrots/kumara.
+Type B (Vertical Trellis): Narrow footprint, high-tensile motorized spools for tomatoes/cucumbers.
+Type C (Shallow Tray): 10cm deep rolling benches for greens/strawberries.
+3.3. Fluidics & Substrate
+Media: 70% horticultural pumice / 30% coco coir blend (optimal aeration, moisture retention, and physical support for all 10 archetypes).
+Delivery: Pressure-compensated, automated drip irrigation with individual zone solenoid valves.
+Reclamation: 100% recirculating. Drainage flows to a central sump, passes through UV-C sterilization and a 100-micron filter, and returns to the main reservoir.
+3.4. HVAC & Thermal Management
+Decoupled Dehumidification: Dedicated horticultural heat-pump dehumidifier (e.g., DryGair class) to handle latent load without overcooling.
+Thermal Battery: The main nutrient reservoir is heavily insulated. A heat pump conditions the water (not just the air), using off-peak power to shift thermal load.
+Transpiration Reclamation: Dehumidifier condensate is piped directly back into the freshwater makeup tank, closing the water loop.
+4. Software Architecture (The TPT Stack)
+The software is split into a deterministic, real-time Edge Layer (Rust) and a high-concurrency Fleet Layer (Go).
+4.1. Edge Control Layer (Rust)
+Runs locally on an industrial PC (e.g., Intel NUC or Jetson) inside the container. Operates offline if cloud connectivity is lost.
+tpt-eng-props Integration:
+Uses tpt-eng-props-air (ASHRAE psychrometrics) to calculate real-time VPD from temperature/humidity sensor arrays.
+Uses tpt-eng-props-water (IAPWS-IF97) to calculate the exact enthalpy required to heat/cool the nutrient reservoir, enabling predictive thermal battery scheduling.
+tpt-thermodynamics Integration: Models the nutrient solution as a multi-component mixture. As EC rises, the system dynamically compensates pH and EC sensor readings for temperature and solute density drift.
+tpt-agripod-actuators (New): A no_std-compatible Hardware Abstraction Layer (HAL) for Modbus/RS-485 communication with VFDs, peristaltic pumps, and LED drivers.
+4.2. Formal Constraint Solver (Rust)
+Leveraging your background in formal verification, the edge controller does not use brittle if/else logic. It uses a lightweight, self-contained SMT-style solver (QF_LRA) to evaluate actuator states against strict contracts before execution.
+Example Contract:
+requires: reservoir_level > 50L AND grid_power_headroom > 2000W
+ensures: pump_duty_cycle <= 0.15 AND led_dimming >= 0.8
+Result: If a pump fails open, the solver instantly detects the constraint violation and cuts main power to the solenoid, preventing a flood.
+4.3. Fleet Orchestration Layer (Go)
+tpt-agripod-orchestrator: A state-machine service that manages the 120-day grow cycle. It pushes "Crop Profiles" (JSON manifests containing target VPD, DLI, N-P-K ratios, and photoperiod) down to the Rust edge node.
+tpt-agripod-telemetry: A high-throughput Go microservice that ingests time-series data from the edge nodes into your multi-engine data platform (e.g., TPT Keystone DB). This data is used to continuously refine the baseline physics models.
+5. Resource Efficiency Protocols
+To ensure commercial viability, the system enforces three strict efficiency laws:
+The Water Law: Net water input must equal the physical mass of water bound in the harvested biomass. All transpiration is captured via dehumidification; all drainage is recirculated.
+The Power Law: Peak grid draw is capped. The edge solver dynamically shifts non-critical loads (reservoir heating, aggressive aeration) to off-peak NZ grid hours, relying on the thermal inertia of the insulated reservoir.
+The Light Law: DLI (Daily Light Integral) is delivered via inter-canopy lighting for tall crops, reducing total wattage by 30% compared to top-down-only lighting, while improving lower-leaf photosynthesis.
+6. Phased Implementation Roadmap (Solo Maintainer Strategy)
+As a solo maintainer, you must avoid "boiling the ocean." Build this in strict, verifiable phases.
+Phase 1: The "Proof of Physics" (Weeks 1-4)
+Goal: Prove the software can model the environment without building hardware.
+Action: Create the tpt-agripod Rust workspace. Write a CLI tool that ingests mock sensor data, uses tpt-eng-props-air to calculate VPD, and simulates the latent heat load of 100 potato plants. Output a predicted HVAC energy cost.
+Deliverable: A verified, deterministic thermodynamic model of the container.
+Phase 2: The Single-Zone Prototype (Weeks 5-12)
+Goal: Validate the physical-digital loop.
+Action: Build a single 1m² grow bed with pumice/coir. Connect a Raspberry Pi, a $20 capacitive moisture sensor, a single solenoid valve, and a small submersible pump.
+Deliverable: Rust code successfully reading moisture, evaluating the QF_LRA constraint contract, and triggering the solenoid without flooding.
+Phase 3: The Full Stack Integration (Weeks 13-20)
+Goal: Connect Edge to Fleet.
+Action: Deploy the Go orchestrator. Have it push a "Lettuce" or "Potato" crop profile to the Rust edge node. Verify telemetry is flowing into the database.
+Deliverable: A fully automated, closed-loop single cartridge.
+Phase 4: Modular Scaling (Weeks 21+)
+Goal: Prove genericity.
+Action: Swap the physical cartridge from shallow trays (lettuce) to deep troughs (carrots). Load the new crop profile via the Go orchestrator. Verify the Rust edge node automatically adjusts VPD targets, drip frequency, and lighting spectra without code changes.

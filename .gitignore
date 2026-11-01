@@ -1,0 +1,42 @@
+# Rust (edge, esp32)
+target/
+**/*.rs.bk
+# Cargo.lock is kept for binaries/firmware; ignore per-library if needed
+
+# ESP32 / embedded build output
+.embuild/
+.espressif/
+*.elf
+*.bin
+*.map
+
+# Go (fleet)
+*.exe
+*.test
+*.out
+vendor/
+/fleet/bin/
+go.work.sum
+
+# Secrets / local config
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Claude Code local
+.claude/settings.local.json
+
+# Logs / temp
+*.log
+tmp/
