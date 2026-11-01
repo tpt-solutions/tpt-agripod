@@ -120,3 +120,5 @@ Deliverable: A fully automated, closed-loop single cartridge.
 Phase 4: Modular Scaling (Weeks 21+)
 Goal: Prove genericity.
 Action: Swap the physical cartridge from shallow trays (lettuce) to deep troughs (carrots). Load the new crop profile via the Go orchestrator. Verify the Rust edge node automatically adjusts VPD targets, drip frequency, and lighting spectra without code changes.
+7. Future Direction: Culture-Based Production
+The profile/cartridge abstraction is intentionally biology-agnostic. A later version may grow from cell or microbial cultures (cultivated cells, mycelium, precision fermentation) instead of whole plants. This would be added as a new profile kind (culture setpoints such as pH, dissolved O2, agitation, feed rate, gas mix) and new vessel-type cartridges, reusing the edge/fleet split, constraint solver, thermal model and telemetry unchanged. Sterility (CIP/SIP), biosafety and food-regulatory scope are deferred. No culture work is planned before Phase 4 completes.

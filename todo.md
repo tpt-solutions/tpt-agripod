@@ -58,7 +58,7 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 - [ ] Windows dev setup notes (cross-compile to aarch64, espup for ESP32)
 
 ### Contracts
-- [ ] Crop Profile JSON Schema v0 (VPD target, DLI, N-P-K, photoperiod, root-zone temp, drip schedule, light spectrum)
+- [ ] Crop Profile JSON Schema v0 (VPD target, DLI, N-P-K, photoperiod, root-zone temp, drip schedule, light spectrum), with a `kind` discriminator (`plant` now, `culture` later) and a `controls` block of named setpoints so the schema stays biology-agnostic
 - [ ] MQTT topic map and message schemas (profile push, telemetry, commands, status/last-will)
 - [ ] Units and sign conventions doc (SI throughout)
 
@@ -163,7 +163,7 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 ## Phase 4: Modular Scaling (wk 21+)
 
 - [ ] Cartridge abstraction: Type A (deep substrate), B (vertical trellis), C (shallow tray) as data, not code
-- [ ] Cartridge descriptor schema (depth, zones, valves, sensors, spool motors) and auto-detect or declare on insert
+- [ ] Cartridge descriptor schema (depth, zones, valves, sensors, spool motors) and auto-detect or declare on insert; model it as a generic vessel/bed descriptor (capabilities, sensors, actuators, contracts) so a future bioreactor is just another descriptor
 - [ ] Profile-driven control: VPD targets, drip frequency and volume, and light spectrum all from the profile
 - [ ] Carrot profile v1 (fine substrate, precise seeding parameters)
 - [ ] Swap test: shallow tray (lettuce) to deep trough (carrots) with only the profile and cartridge changed
@@ -189,6 +189,7 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 - [ ] Profile test matrix: every profile validates and simulates in Phase 1 CLI
 
 ### Resource efficiency laws
+- [ ] Express the laws as per-profile data (a list of metrics and limits), not three hard-coded laws, so culture profiles can define their own (e.g. yield per kWh, media recycling)
 - [ ] Water Law: metrics for net water input vs. water bound in biomass; condensate reclamation accounting
 - [ ] Power Law: peak-draw cap, and non-critical load shifting to off-peak NZ grid hours
 - [ ] Light Law: inter-canopy lighting control and DLI delivery; measure the 30% wattage reduction
@@ -249,3 +250,4 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 - [ ] Jetson toolchain and CI runner availability
 - [ ] Compliance and electrical safety requirements (NZ) for the container build
 - [ ] Spec timings are for a solo maintainer; revisit after Gate 2
+- [ ] Deferred: sterility (CIP/SIP), biosafety and NZ regulatory scope (MPI/FSANZ) if culture-based production is pursued; see spec section 7
