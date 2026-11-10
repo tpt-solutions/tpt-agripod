@@ -25,23 +25,23 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 ## Phase 0: Foundation
 
 ### Repo & licensing
-- [ ] Init monorepo (git) with layout: `/edge` (Cargo workspace), `/fleet` (Go modules), `/esp32` (no_std firmware), `/profiles`, `/docs`, `/hardware`
-- [ ] Add `LICENSE-MIT` and `LICENSE-APACHE` (copyright TPT Solutions)
-- [ ] README with dual-licence statement ("MIT OR Apache-2.0, at your option") and contribution clause
-- [ ] `license = "MIT OR Apache-2.0"` in every `Cargo.toml`; SPDX header convention for Go and Rust files
-- [ ] CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, `.gitignore`, `.editorconfig`
-- [ ] ADR log in `/docs/adr` (record decisions: monorepo, MQTT+JSON, own QF_LRA solver, ESP32 leaf tier, Keystone sink)
+- [x] Init monorepo (git) with layout: `/edge` (Cargo workspace), `/fleet` (Go modules), `/esp32` (no_std firmware), `/profiles`, `/docs`, `/hardware`
+- [x] Add `LICENSE-MIT` and `LICENSE-APACHE` (copyright TPT Solutions)
+- [x] README with dual-licence statement ("MIT OR Apache-2.0, at your option") and contribution clause
+- [x] `license = "MIT OR Apache-2.0"` in every `Cargo.toml`; SPDX header convention for Go and Rust files
+- [x] CONTRIBUTING (issues only), `.gitignore`, `.editorconfig`
+- [x] ADR log in `/docs/adr` (record decisions: monorepo, MQTT+JSON, own QF_LRA solver, ESP32 leaf tier, Keystone sink)
 
 ### Licence enforcement (no Apache-only deps)
-- [ ] `deny.toml` for `cargo-deny`: allowlist MIT, BSD-2/3, ISC, Zlib, Unlicense, and `MIT OR Apache-2.0` expressions; deny Apache-only, copyleft, MPL, EPL
-- [ ] Go: `go-licenses` check with the same allowlist
+- [x] `deny.toml` for `cargo-deny`: allowlist MIT, BSD-2/3, ISC, Zlib, Unlicense, and `MIT OR Apache-2.0` expressions; deny Apache-only, copyleft, MPL, EPL
+- [x] Go: `go-licenses` check with the same allowlist
 - [ ] Add a CI job that fails the build on any disallowed licence
 - [ ] Audit `esp-hal` and chosen Modbus, MQTT and Postgres-driver crates and modules against the policy
 - [ ] Check licence of the Keystone Go client and of the chosen MQTT client and broker (paho is EPL/EDL; verify or pick an alternative)
 
 ### Upstream TPT crates
 - [x] Locate upstream: `tpt-solutions/tpt-engineering` (43 crates; includes `tpt-eng-props-air`, `tpt-eng-props-water`, `tpt-eng-props-mixture`, `tpt-eng-controls`, `tpt-eng-timeseries-*`; all `tpt-eng-props-*` are no_std) and `tpt-solutions/tpt-thermodynamics` (`tpt-thermo-*`, 12 crates)
-- [ ] Check whether the crates are on crates.io; otherwise pin as git dependencies (by commit) and document the version policy
+- [x] Check whether the crates are on crates.io; otherwise pin as git dependencies (by commit) and document the version policy
 - [ ] Both repos are MIT OR Apache-2.0 (workspace level); confirm per-crate `license` fields and transitive deps (`tpt-math` from crates.io) pass `deny.toml`
 - [ ] Reuse the upstream `deny.toml`, `rust-toolchain.toml` (edition 2024, MSRV 1.85), `rustfmt.toml` and `cargo xtask` conventions as the starting point for `/edge`
 - [ ] Evaluate `tpt-eng-controls`, `tpt-eng-timeseries-*` and `tpt-eng-heat-transfer` / `-thermal-mgmt` / `-building-sys` for reuse in Phase 1 (container load model) before writing new code
@@ -50,17 +50,17 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 - [ ] Record any other missing API (IAPWS-IF97 enthalpy, mixture model) as upstream issues
 
 ### Toolchain & CI
-- [ ] Rust workspace skeleton: `tpt-agripod-core`, `-sim`, `-solver`, `-actuators`, `-edge`, `-cli`
-- [ ] Go module skeleton: `tpt-agripod-orchestrator`, `tpt-agripod-telemetry`
+- [x] Rust workspace skeleton: `tpt-agripod-core`, `-sim`, `-solver`, `-actuators`, `-edge`, `-cli`
+- [x] Go module skeleton: `tpt-agripod-orchestrator`, `tpt-agripod-telemetry`
 - [ ] ESP32 firmware crate skeleton (`esp-hal`, no_std)
 - [ ] CI matrix: x86_64 (NUC), aarch64 (Raspberry Pi), Jetson (aarch64) cross-builds; ESP32 target build
 - [ ] CI: `cargo fmt`, `clippy -D warnings`, `cargo test`, `go vet`, `go test -race`
-- [ ] Windows dev setup notes (cross-compile to aarch64, espup for ESP32)
+- [x] Windows dev setup notes (cross-compile to aarch64, espup for ESP32)
 
 ### Contracts
-- [ ] Crop Profile JSON Schema v0 (VPD target, DLI, N-P-K, photoperiod, root-zone temp, drip schedule, light spectrum), with a `kind` discriminator (`plant` now, `culture` later) and a `controls` block of named setpoints so the schema stays biology-agnostic
-- [ ] MQTT topic map and message schemas (profile push, telemetry, commands, status/last-will)
-- [ ] Units and sign conventions doc (SI throughout)
+- [x] Crop Profile JSON Schema v0 (VPD target, DLI, N-P-K, photoperiod, root-zone temp, drip schedule, light spectrum), with a `kind` discriminator (`plant` now, `culture` later) and a `controls` block of named setpoints so the schema stays biology-agnostic
+- [x] MQTT topic map and message schemas (profile push, telemetry, commands, status/last-will)
+- [x] Units and sign conventions doc (SI throughout)
 
 **Gate 0:** CI green on all targets; licence check passes; upstream crates resolve.
 
@@ -249,5 +249,10 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 - [ ] Choice of MQTT client and broker that satisfies the licence policy
 - [ ] Jetson toolchain and CI runner availability
 - [ ] Compliance and electrical safety requirements (NZ) for the container build
+- [ ] Upstream `tpt-engineering/deny.toml` allows `Apache-2.0` and `MPL-2.0`, which breaks the standing rule. Our `edge/deny.toml` does not copy them. Confirm no upstream crate pulled in via the git pin needs an exception.
+- [ ] `tpt-thermo-*` crates are not on crates.io (only `tpt-eng-props-*`, `tpt-eng-controls` and `tpt-math*` are, at 0.1.1). They are on GitHub (`tpt-solutions/tpt-thermodynamics`, master), so pin them as git dependencies by commit. The workspace and crates are `MIT OR Apache-2.0` (`license.workspace = true`) and both LICENSE files are present. GitHub's "Apache-2.0" label is only the detector picking one file.
+- [ ] Upstream `tpt-thermo-electrolyte` and `tpt-thermo-transport` do not cover EC or pH temperature/density compensation. File these as upstream issues.
+- [x] `unicode-ident` is licensed `(MIT OR Apache-2.0) AND Unicode-3.0`. `Unicode-3.0` is now on the `edge/deny.toml` allow-list by maintainer decision; it is not in the original todo.md list.
+- [ ] Go licence check uses `--allowed_licenses`. A dual-licensed Go dependency may be reported as a single licence, so it could be rejected even when it is MIT OR Apache-2.0. Test this when the first real dependency is added.
 - [ ] Spec timings are for a solo maintainer; revisit after Gate 2
 - [ ] Deferred: sterility (CIP/SIP), biosafety and NZ regulatory scope (MPI/FSANZ) if culture-based production is pursued; see spec section 7
