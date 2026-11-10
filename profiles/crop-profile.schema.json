@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tpt-agripod:crop-profile:v0",
+  "title": "Agripod Crop Profile v0",
+  "description": "A Crop Profile is data that tells the edge node what to hold the environment at. Targets are the crop-facing numbers. Controls is a biology-agnostic list of named setpoints, so the same contract machinery works for a future culture profile (kind 'culture', not yet defined). Units are fixed by field name: see docs/units.md.",
+  "type": "object",
+  "required": ["schema_version", "kind", "profile_id", "profile_version", "name", "targets", "controls"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "0",
+      "description": "Schema version. Bumped on any breaking change."
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["plant"],
+      "description": "Profile discriminator. 'plant' is the only kind in v0. 'culture' is reserved for the future culture-based production path (spec section 7)."
+    },
+    "profile_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{1,62}$",
+      "description": "Stable slug, e.g. 'lettuce'."
+    },
+    "profile_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Semantic version of this profile's content."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 1000
+    },
+    "cartridge_types": {
+      "type": "array",
+      "description": "Cartridge types this profile is designed for (spec 3.2).",
+      "items": { "enum": ["A", "B", "C"] },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "targets": {
+      "$ref": "#/$defs/targets"
+    },
+    "drip_schedule": {
+      "$ref": "#/$defs/dripSchedule"
+    },
+    "controls": {
+      "type": "object",
+      "description": "Named setpoints. Keys are lower_snake_case. The edge maps each control to a controller and a contract. Adding a control needs no code change if the edge already knows its name; unknown names are rejected.",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9_]{1,62}$" },
+      "minProperties": 1,
+      "additionalProperties": { "$ref": "#/$defs/control" }
+    }
+  },
+  "$defs": {
+    "range": {
+      "type": "object",
+      "required": ["min", "max"],
+      "additionalProperties": false,
+      "properties": {
+        "min": { "type": "number" },
+        "max": { "type": "number" }
+      }
+    },
+    "targets": {
+      "type": "object",
+      "required": ["vpd_kpa", "dli_mol_m2_day", "photoperiod_h", "root_zone_temp_c"],
+      "additionalProperties": false,
+      "properties": {
+        "vpd_kpa": {
+          "description": "Vapour pressure deficit target band, kPa (units.md).",
+          "allOf": [
+            { "$ref": "#/$defs/range" },
+            { "properties": { "min": { "minimum": 0 }, "max": { "maximum": 5 } } }
+          ]
+        },
+        "dli_mol_m2_day": {
+          "description": "Daily light integral, mol/m2/day.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 80
+        },
+        "photoperiod_h": {
+          "description": "Light hours per day.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 24
+        },
+        "root_zone_temp_c": {
+          "description": "Root-zone (reservoir) temperature band, degrees Celsius.",
+          "allOf": [
+            { "$ref": "#/$defs/range" },
+            { "properties": { "min": { "minimum": 0, "maximum": 60 }, "max": { "minimum": 0, "maximum": 60 } } }
+          ]
+        },
+        "npk_ratio": {
+          "description": "Relative N:P:K demand. Ratios, not mass. Optional.",
+          "type": "object",
+          "required": ["n", "p", "k"],
+          "additionalProperties": false,
+          "properties": {
+            "n": { "type": "number", "minimum": 0 },
+            "p": { "type": "number", "minimum": 0 },
+            "k": { "type": "number", "minimum": 0 }
+          }
+        },
+        "ec_s_m": {
+          "description": "Nutrient solution electrical conductivity band, S/m (units.md). Optional.",
+          "allOf": [
+            { "$ref": "#/$defs/range" },
+            { "properties": { "min": { "minimum": 0 }, "max": { "maximum": 10 } } }
+          ]
+        },
+        "ph": {
+          "description": "Nutrient solution pH band. Optional.",
+          "allOf": [
+            { "$ref": "#/$defs/range" },
+            { "properties": { "min": { "minimum": 0, "maximum": 14 }, "max": { "minimum": 0, "maximum": 14 } } }
+          ]
+        }
+      }
+    },
+    "dripSchedule": {
+      "type": "object",
+      "required": ["interval_min", "volume_l"],
+      "additionalProperties": false,
+      "properties": {
+        "interval_min": {
+          "description": "Minutes between irrigation events. Explicit _min suffix, per units.md.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "volume_l": {
+          "description": "Litres per irrigation event.",
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "control": {
+      "type": "object",
+      "required": ["value", "unit"],
+      "additionalProperties": false,
+      "properties": {
+        "value": { "type": "number" },
+        "unit": {
+          "type": "string",
+          "description": "SI-derived unit symbol, as in docs/units.md (e.g. 'frac', 'kpa', 'degC', 'w', 'umol_m2_s')."
+        },
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "contract_ref": {
+          "type": "string",
+          "description": "Optional id of the solver contract this setpoint must satisfy."
+        }
+      }
+    }
+  }
+}
