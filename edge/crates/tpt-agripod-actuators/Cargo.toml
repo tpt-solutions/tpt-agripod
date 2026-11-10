@@ -6,8 +6,12 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
-description = "Actuator HAL: Modbus RTU over RS-485 and device abstractions (Phase 2)."
+description = "Actuator HAL: no_std Modbus RTU master and device abstractions (Phase 2)."
 publish = false
+
+[features]
+# Mock transport for host tests of this crate and of crates that drive devices.
+mock = []
 
 [lints]
 workspace = true

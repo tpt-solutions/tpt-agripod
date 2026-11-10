@@ -43,6 +43,9 @@ version = "0.1.0"
 [[package]]
 name = "tpt-agripod-edge"
 version = "0.1.0"
+dependencies = [
+ "tpt-agripod-solver",
+]
 
 [[package]]
 name = "tpt-agripod-sim"
