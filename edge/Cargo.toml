@@ -26,6 +26,10 @@ all = { level = "warn", priority = -1 }
 [workspace.dependencies]
 tpt-eng-props-air = "0.1"
 tpt-eng-props-water = "0.1"
+# uom types used by tpt-eng-props-air's API (same 0.1.x line as the props crates).
+tpt-math-units = "0.1"
+# Envelope UA, transmission and infiltration (Phase 1 load model). Evaluated in todo.md Phase 0.
+tpt-eng-building-sys = "0.2"
 tpt-thermo-core = { git = "https://github.com/tpt-solutions/tpt-thermodynamics", rev = "67c773ac38b75d6198e8152bc62a8b40102353ec" }
 tpt-thermo-electrolyte = { git = "https://github.com/tpt-solutions/tpt-thermodynamics", rev = "67c773ac38b75d6198e8152bc62a8b40102353ec" }
 tpt-thermo-transport = { git = "https://github.com/tpt-solutions/tpt-thermodynamics", rev = "67c773ac38b75d6198e8152bc62a8b40102353ec" }

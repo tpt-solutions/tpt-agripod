@@ -9,5 +9,10 @@ license = "MIT OR Apache-2.0"
 description = "Deterministic physics simulation of the Agripod container (Phase 1)."
 publish = false
 
+[dependencies]
+tpt-eng-props-air = { workspace = true }
+tpt-math-units = { workspace = true }
+tpt-eng-building-sys = { workspace = true }
+
 [lints]
 workspace = true
