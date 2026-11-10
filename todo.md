@@ -37,7 +37,7 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 - [x] Go: `go-licenses` check with the same allowlist
 - [x] Add a CI job that fails the build on any disallowed licence (`cargo deny` gate in `.github/workflows/ci.yml`, plus a `go-licenses` job; not yet run on GitHub)
 - [ ] Audit `esp-hal` and chosen Modbus, MQTT and Postgres-driver crates and modules against the policy
-- [ ] Check licence of the Keystone Go client and of the chosen MQTT client and broker (paho is EPL/EDL; verify or pick an alternative)
+- [ ] Check licence of the Keystone Go client and of the chosen MQTT client and broker (paho is EPL/EDL; verify or pick an alternative). MQTT part done (ADR 0006, 0007: all MIT). Keystone Go client still unidentified: no repo or module path is in the repo or the spec
 
 ### Upstream TPT crates
 - [x] Locate upstream: `tpt-solutions/tpt-engineering` (43 crates; includes `tpt-eng-props-air`, `tpt-eng-props-water`, `tpt-eng-props-mixture`, `tpt-eng-controls`, `tpt-eng-timeseries-*`; all `tpt-eng-props-*` are no_std) and `tpt-solutions/tpt-thermodynamics` (`tpt-thermo-*`, 12 crates)
@@ -87,25 +87,25 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 ## Phase 2: Single-Zone Prototype (wk 5-12)
 
 ### Actuator HAL (`tpt-agripod-actuators`)
-- [ ] `no_std` Modbus RTU over RS-485 (master and slave); CRC, framing, timeouts
-- [ ] Device abstractions: solenoid/relay, peristaltic pump, VFD, LED driver, moisture sensor
-- [ ] Mock transport for host tests; hardware transport for Linux serial
-- [ ] Fuzz and property tests on the frame parser
+- [ ] `no_std` Modbus RTU over RS-485 (master and slave); CRC, framing, timeouts. Partial: master done and built for `thumbv7em-none-eabihf`, with CRC-16 vectors and exception handling. Slave (ESP32 side) not written
+- [ ] Device abstractions: solenoid/relay, peristaltic pump, VFD, LED driver, moisture sensor. Blocked: needs the register maps from the device datasheets
+- [ ] Mock transport for host tests; hardware transport for Linux serial. Partial: mock done. Linux serial transport not written
+- [ ] Fuzz and property tests on the frame parser. Partial: seeded property tests (20,000 random frames) done. No coverage-guided fuzzing yet
 
 ### Constraint solver (QF_LRA)
-- [ ] Core: exact rational arithmetic (no GPL big-num crates) and simplex-based QF_LRA decision procedure
-- [ ] Contract DSL: `requires:` / `ensures:` with linear constraints and boolean connectives
-- [ ] Contract evaluator: check actuator command against state before execution; produce a violation explanation
-- [ ] Differential tests against a reference solver run offline (not shipped as a dependency)
-- [ ] Bounded runtime (worst-case time budget) and `no_std` feasibility check
-- [ ] Contracts for: flood prevention (pump duty, reservoir level), power headroom, LED dimming limits
+- [ ] Core: exact rational arithmetic (no GPL big-num crates) and simplex-based QF_LRA decision procedure. Partial: checked `i128` rationals done; Fourier–Motzkin used first (ADR 0008); simplex not written
+- [x] Contract DSL: `requires:` / `ensures:` with linear constraints and boolean connectives (AND, OR, NOT, parentheses; unit suffixes rejected)
+- [x] Contract evaluator: check actuator command against state before execution; produce a violation explanation
+- [ ] Differential tests against a reference solver run offline (not shipped as a dependency). Partial: checked against brute-force grid search. No reference solver is installed
+- [ ] Bounded runtime (worst-case time budget) and `no_std` feasibility check. Partial: decision procedure has a constraint budget; the solver builds for `thumbv7em-none-eabihf` with `alloc`. Worst-case timing not measured
+- [x] Contracts for: flood prevention (pump duty, reservoir level), power headroom, LED dimming limits (`edge/contracts/`; the solenoid and LED thresholds are placeholders, see `docs/phase2-edge-loop.md`)
 
 ### Edge control loop
-- [ ] Edge daemon: sensor read, state estimate, controller proposal, solver check, actuate, log
-- [ ] Moisture-driven irrigation controller for a single zone
-- [ ] Safe state on solver failure, sensor loss or comms loss (valves close, pump off)
-- [ ] Fault injection: pump fails open, valve sticks, sensor reads stuck or out of range
-- [ ] Structured local logging and a local event journal
+- [ ] Edge daemon: sensor read, state estimate, controller proposal, solver check, actuate, log. Partial: the control cycle is written and tested with fake I/O. The daemon process, real sensor reads and real actuation are not
+- [x] Moisture-driven irrigation controller for a single zone (hysteresis, pulse limit, cooldown; thresholds are placeholders)
+- [x] Safe state on solver failure, sensor loss or comms loss (valves close, pump off). Comms loss means the actuator bus; the fleet link is not a safety input (`docs/phase2-edge-loop.md`)
+- [ ] Fault injection: pump fails open, valve sticks, sensor reads stuck or out of range. Partial: pump fail-open, stuck, stale, out-of-range, missing and actuator-error cases tested. A valve stuck open with the pump off is not detectable with the current sensors
+- [ ] Structured local logging and a local event journal. Partial: structured `Event` type and a `Journal` trait. No durable on-disk journal yet
 
 ### ESP32 leaf tier
 - [ ] `esp-hal` firmware: Modbus RTU slave, moisture ADC, solenoid and pump outputs
@@ -246,7 +246,7 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 ## Open questions & risks
 - [ ] `tpt-thermodynamics` may not cover EC/pH compensation out of the box (electrolyte crate only; unconfirmed); may need an Agripod-side model or upstream work
 - [ ] Keystone Go client: licence and API stability (Keystone is self-described as not production-hardened)
-- [ ] Choice of MQTT client and broker that satisfies the licence policy. Audit so far (`docs/dependency-pins.md`, "Licence audit"): `rumqttc` is Apache-2.0 only and `paho-mqtt` is EPL-2.0, both denied; `minimq` (MIT, no_std) is the candidate. Decision pending, ADR needed.
+- [x] Choice of MQTT client and broker that satisfies the licence policy. Decided: edge client `minimq` (ADR 0006); fleet client `gmqtt` and fleet broker `mochi-mqtt/server`, both MIT (ADR 0007). Neither is added to a `Cargo.toml` or `go.mod` yet.
 - [ ] Jetson toolchain and CI runner availability
 - [ ] Compliance and electrical safety requirements (NZ) for the container build
 - [ ] Upstream `tpt-engineering/deny.toml` allows `Apache-2.0` and `MPL-2.0`, which breaks the standing rule. Our `edge/deny.toml` does not copy them. Confirm no upstream crate pulled in via the git pin needs an exception.
