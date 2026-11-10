@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+#
+# cargo-deny policy for the Agripod edge workspace (todo.md, "Licence enforcement").
+# Run from edge/: cargo deny check
+#
+# Policy: MIT, BSD-2/3, ISC, Zlib, Unlicense, or a MIT/Apache-2.0 dual expression.
+# Apache-2.0 on its own is NOT allowed. Copyleft (GPL/LGPL/AGPL), MPL and EPL are denied
+# by omission, since they are not in the allow-list.
+#
+# Upstream tpt-engineering/deny.toml also allows Apache-2.0 and MPL-2.0. Do not copy those
+# entries back in. They break the standing rule in todo.md.
+
+[advisories]
+version = 2
+yanked = "deny"
+ignore = []
+
+[licenses]
+confidence-threshold = 0.9
+
+allow = [
+    "MIT",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unlicense",
+    # Permissive. Allowed by the maintainer for unicode-ident (via serde_derive). Not in todo.md's original list.
+    "Unicode-3.0",
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+# Only the pinned upstream TPT repo. See docs/dependency-pins.md.
+allow-git = ["https://github.com/tpt-solutions/tpt-thermodynamics"]

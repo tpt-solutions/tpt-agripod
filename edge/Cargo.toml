@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/tpt-solutions/tpt-agripod"
+publish = false
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+# Upstream TPT crates. Version policy: docs/dependency-pins.md.
+# crates.io crates are pinned to a minor version. tpt-thermo-* are not on crates.io, so they
+# are pinned to an exact commit of tpt-solutions/tpt-thermodynamics. Do not move a git pin
+# without re-running cargo deny and the edge tests.
+[workspace.dependencies]
+tpt-eng-props-air = "0.1"
+tpt-eng-props-water = "0.1"
+tpt-thermo-core = { git = "https://github.com/tpt-solutions/tpt-thermodynamics", rev = "67c773ac38b75d6198e8152bc62a8b40102353ec" }
+tpt-thermo-electrolyte = { git = "https://github.com/tpt-solutions/tpt-thermodynamics", rev = "67c773ac38b75d6198e8152bc62a8b40102353ec" }
+tpt-thermo-transport = { git = "https://github.com/tpt-solutions/tpt-thermodynamics", rev = "67c773ac38b75d6198e8152bc62a8b40102353ec" }

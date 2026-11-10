@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "tpt-agripod-cli"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+description = "Command-line tool for Agripod: ingest mock data, simulate, report."
+publish = false
+
+[[bin]]
+name = "agripod"
+path = "src/main.rs"
+
+[dependencies]
+tpt-agripod-core = { version = "0.1.0", path = "../tpt-agripod-core" }
+
+[lints]
+workspace = true
