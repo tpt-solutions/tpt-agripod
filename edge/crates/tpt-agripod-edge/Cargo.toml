@@ -9,5 +9,8 @@ license = "MIT OR Apache-2.0"
 description = "Edge control loop: sense, estimate, propose, check contracts, actuate, log (Phase 2)."
 publish = false
 
+[dependencies]
+tpt-agripod-solver = { version = "0.1.0", path = "../tpt-agripod-solver" }
+
 [lints]
 workspace = true
