@@ -1,0 +1,4 @@
+# Pump contract (flood prevention). Source: spec section 4.2.
+# Units are in the variable names: _l litres, _w watts, _frac fraction 0 to 1, _s seconds.
+requires: reservoir_level_l > 50 AND grid_power_headroom_w > 2000
+ensures: pump_duty_cycle_frac <= 0.15

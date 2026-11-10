@@ -1,0 +1,4 @@
+# Solenoid valve contract. PLACEHOLDER limits: confirm against the flood study and
+# the valve datasheet before use. The ESP32 holds a separate hard-coded maximum (Phase 2).
+requires: reservoir_level_l > 50
+ensures: valve_open_s <= 900
