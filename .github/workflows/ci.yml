@@ -1,0 +1,88 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+#
+# Phase 0 CI. Gate 0 needs these jobs green on every target (todo.md).
+# Written but not yet run on GitHub: first run is the verification.
+
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: edge (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64
+            runner: ubuntu-latest
+            cross: false
+    defaults:
+      run:
+        working-directory: edge
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: edge
+      - name: Format
+        run: cargo fmt --all --check
+      - name: Clippy
+        run: cargo clippy --all-targets --workspace -- -D warnings
+      - name: Test
+        run: cargo test --workspace
+      - name: Licence and advisory gate
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: edge/Cargo.toml
+          command: check licenses bans sources advisories
+
+  # aarch64 (Raspberry Pi, Jetson) and ESP32 cross-builds are added once the
+  # toolchains are pinned: see docs/dev-setup.md.
+
+  fleet:
+    name: fleet (Go)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        module: [fleet/orchestrator, fleet/telemetry]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - name: Vet
+        working-directory: ${{ matrix.module }}
+        run: go vet ./...
+      - name: Test with race detector
+        working-directory: ${{ matrix.module }}
+        run: go test -race ./...
+
+  licence-go:
+    name: Go licence check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - name: Install go-licenses
+        run: go install github.com/google/go-licenses@v1.6.0
+      # Fails on any licence outside the allow-list in todo.md. Apache-only is denied.
+      # Go modules are not yet pinned, so this step is a no-op until dependencies exist.
+      - name: Check Go dependency licences
+        run: |
+          for m in fleet/orchestrator fleet/telemetry; do
+            (cd "$m" && go-licenses check ./... \
+              --allowed_licenses=MIT,BSD-2-Clause,BSD-3-Clause,ISC,Zlib,Unlicense \
+              --ignore tpt-agripod-orchestrator --ignore tpt-agripod-telemetry)
+          done
