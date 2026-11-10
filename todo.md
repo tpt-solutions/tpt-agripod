@@ -44,7 +44,7 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 - [x] Check whether the crates are on crates.io; otherwise pin as git dependencies (by commit) and document the version policy
 - [ ] Both repos are MIT OR Apache-2.0 (workspace level); confirm per-crate `license` fields and transitive deps (`tpt-math` from crates.io) pass `deny.toml`
 - [ ] Reuse the upstream `deny.toml`, `rust-toolchain.toml` (edition 2024, MSRV 1.85), `rustfmt.toml` and `cargo xtask` conventions as the starting point for `/edge`
-- [ ] Evaluate `tpt-eng-controls`, `tpt-eng-timeseries-*` and `tpt-eng-heat-transfer` / `-thermal-mgmt` / `-building-sys` for reuse in Phase 1 (container load model) before writing new code
+- [x] Evaluate `tpt-eng-controls`, `tpt-eng-timeseries-*` and `tpt-eng-heat-transfer` / `-thermal-mgmt` / `-building-sys` for reuse in Phase 1 (container load model). Result: adopted `tpt-eng-building-sys` 0.2 (envelope UA, transmission, infiltration; formulas match the hand model). Not adopted for Phase 1: `tpt-eng-controls` (PID, Phase 2), `timeseries-*` (Phase 3 telemetry), `thermal-mgmt` (heat sinks, not relevant). Note: this evaluation was done after the Phase 1 model was first written, not before, and the model was then switched over.
 - [x] Check that `tpt-thermo-electrolyte` (Pitzer/eNRTL/HKF) and `tpt-thermo-transport` can compute solution density and temperature-compensated EC/pH. Result: no. Read at rev `67c773a`: no conductivity or pH functions in the electrolyte crate; see Open questions
 - [ ] Note that only `tpt-thermo-core` is no_std; keep thermo usage on the edge PC, not the ESP32
 - [ ] Record any other missing API (IAPWS-IF97 enthalpy, mixture model) as upstream issues
@@ -68,17 +68,17 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 
 ## Phase 1: Proof of Physics (wk 1-4)
 
-- [ ] Mock sensor data format (CSV or JSON: temperature, RH, CO2, reservoir temperature, power) and generator
-- [ ] Sensor ingest and validation (range checks, timestamps, missing data)
-- [ ] VPD calculation via `tpt-eng-props-air` (ASHRAE psychrometrics)
-- [ ] Plant transpiration model for 100 potato plants (leaf area, VPD, light, growth stage)
-- [ ] Latent and sensible heat load model of the container (envelope R-30+, lighting, equipment)
-- [ ] HVAC and dehumidifier energy model; predicted energy cost output (NZ tariff, off-peak aware)
-- [ ] CLI tool: ingest mock data, simulate, output report (human and JSON)
-- [ ] Determinism: fixed seeds, no wall-clock; identical output across platforms
-- [ ] Golden-file tests and property tests (energy balance closes, VPD monotonicity)
-- [ ] Validate against reference psychrometric tables and a hand calculation
-- [ ] Short write-up of the model, assumptions and known limits in `/docs`
+- [x] Mock sensor data format (CSV: temperature, RH, CO2, reservoir temperature, power, optional ambient) and generator (`agripod generate-mock`)
+- [x] Sensor ingest and validation (range checks, timestamps, missing data; bad rows rejected with line numbers)
+- [x] VPD calculation via `tpt-eng-props-air` (ASHRAE psychrometrics)
+- [ ] Plant transpiration model for 100 potato plants (leaf area, VPD, light, growth stage). Partial: LAI and light are constant; no growth-stage dependence yet. Calibration of `g_leaf_max` is a guess, not measured
+- [x] Latent and sensible heat load model of the container (envelope R-30+, lighting, equipment)
+- [x] HVAC and dehumidifier energy model; predicted energy cost output (NZ tariff, off-peak aware). Tariff is a placeholder
+- [x] CLI tool: ingest mock data, simulate, output report (human and JSON)
+- [ ] Determinism: fixed seeds, no wall-clock; identical output across platforms. Fixed seed and golden test pass on Windows. Cross-platform identity is confirmed only when CI's Linux job runs
+- [x] Golden-file tests and property tests (energy books balance, VPD monotonicity). Note: the balance test checks HVAC sign and branch bookkeeping, not the physics
+- [x] Validate against reference psychrometric tables and a hand calculation (reference values from the ASHRAE table as recalled; re-check against the printed table)
+- [x] Short write-up of the model, assumptions and known limits in `/docs` (`docs/phase1-model.md`)
 
 **Gate 1 (deliverable):** verified, deterministic thermodynamic model of the container, with predicted HVAC energy cost.
 

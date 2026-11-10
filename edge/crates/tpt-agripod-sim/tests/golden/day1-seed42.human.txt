@@ -1,0 +1,30 @@
+Agripod Phase 1 simulation
+Input:   288 samples, 0 rejected rows, 0 gap intervals skipped
+Period:  2026-01-01T00:00:00Z to 2026-01-01T23:55:00Z (1.00 days integrated)
+
+Climate
+  VPD:                 mean 0.89 kPa, min 0.82, max 0.96
+
+Plants (100 plants, 27.0 m² ground)
+  Transpiration:       3.02 mm/day (81.2 kg total)
+  Latent load:         55.31 kWh
+  Water reclaimed:     80.7 L (condensate to makeup tank)
+
+Loads (kWh)
+  Envelope:            -4.46
+  Make-up air:         -0.77
+  Process (lights, pumps, controls): 32.22
+
+HVAC electricity (kWh)
+  Sensible cooling:    9.43
+  Sensible heating:    0.44
+  Dehumidification:    67.25
+  Total HVAC:          77.12
+
+HVAC cost (NZD; placeholder tariff 0.30 peak / 0.15 off-peak per kWh)
+  Off-peak:            9.94 kWh, $1.49
+  Peak:                67.18 kWh, $20.15
+  Total:               $21.65
+
+Checks: energy bookkeeping residual 0.000000 kWh
+Parameters are assumptions, not measurements. See docs/phase1-model.md.

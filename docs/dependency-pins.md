@@ -15,7 +15,9 @@ Written for: engineers adding or updating a dependency on the TPT upstream crate
 | Crate | Source | Pin | Notes |
 |---|---|---|---|
 | `tpt-eng-props-air` | crates.io | `0.1` (0.1.1 at time of writing) | ASHRAE psychrometrics. `no_std`. |
-| `tpt-eng-props-water` | crates.io | `0.1` (0.1.1 at time of writing) | IAPWS-IF97 Regions 1, 2 and 4. Region 3 unsupported. `no_std`. |
+| `tpt-eng-props-water` | crates.io | `0.1` (0.1.1 at time of writing) | IAPWS-IF97 Regions 1, 2 and 4. Region 3 unsupported. `no_std`. Not used by any member until Phase 3. |
+| `tpt-math-units` | crates.io | `0.1` | Re-exports `uom`. Needed to build and read the typed quantities the props-air API takes and returns. `MIT OR Apache-2.0`. |
+| `tpt-eng-building-sys` | crates.io | `0.2` | Envelope UA, transmission and infiltration load formulas, used by the Phase 1 load model. Pulls in `tpt-eng-heat-transfer` 0.2 transitively. `MIT OR Apache-2.0`. Evaluated in `todo.md`, Phase 0. |
 | `tpt-thermo-core` | git `tpt-solutions/tpt-thermodynamics` | `67c773ac38b75d6198e8152bc62a8b40102353ec` (master, 2026-09-04) | Only `no_std` crate in that repo. |
 | `tpt-thermo-electrolyte` | same | same rev | Pitzer, eNRTL, HKF. No EC or pH compensation (open issue in `todo.md`). |
 | `tpt-thermo-transport` | same | same rev | Viscosity, thermal conductivity, diffusivity. |

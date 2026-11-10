@@ -15,6 +15,7 @@ path = "src/main.rs"
 
 [dependencies]
 tpt-agripod-core = { version = "0.1.0", path = "../tpt-agripod-core" }
+tpt-agripod-sim = { version = "0.1.0", path = "../tpt-agripod-sim" }
 
 [lints]
 workspace = true
