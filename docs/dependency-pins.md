@@ -28,6 +28,29 @@ The `tpt-thermo-*` pins are declared under `[workspace.dependencies]` in `edge/C
 - The `tpt-thermo-*` licences are `MIT OR Apache-2.0`, inherited from the workspace.
 - `cargo deny` passes the transitive licences. `Unicode-3.0` (needed by `unicode-ident` via `serde_derive`) is on the allow-list by maintainer decision.
 
+## Licence audit
+
+Checked against the policy in `todo.md` (MIT, BSD-2/3, ISC, Zlib, Unlicense, or MIT/Apache-2.0 dual; no Apache-only, copyleft, MPL or EPL). Licences are from crates.io metadata unless noted.
+
+| Component | Candidate use | Licence | Verdict |
+|---|---|---|---|
+| `esp-hal` | ESP32 firmware | MIT OR Apache-2.0 | Allowed |
+| `tokio-modbus` | Modbus on the edge host (std only) | MIT OR Apache-2.0 | Allowed. Not `no_std`, so the RTU framer in `tpt-agripod-actuators` stays in-house |
+| `tokio-serial` | Serial port for Modbus RTU (host) | MIT | Allowed |
+| `rumqttc` | MQTT client (edge) | Apache-2.0 only | **Denied** |
+| `paho-mqtt` | MQTT client (edge) | EPL-2.0 | **Denied** |
+| `mqttrs` | MQTT codec | Apache-2.0 only | **Denied** |
+| `rumqttd` | MQTT broker (Rust) | Apache-2.0 only | **Denied** |
+| `minimq` | MQTT client, `no_std` | MIT | Allowed. Candidate; needs a transport layer |
+| `mqtt-protocol` | MQTT codec | MIT/Apache-2.0 | Allowed. Candidate |
+| `tokio-postgres` | Postgres driver (Rust, if needed) | MIT OR Apache-2.0 | Allowed |
+| `pgx` (Go) | Postgres driver for telemetry to Keystone | MIT | Allowed |
+| `eclipse/paho.mqtt.golang` (Go) | MQTT client (fleet) | EPL-2.0 / EDL-1.0 per `todo.md` | **Not verified here.** The EDL-1.0 option is BSD-3-equivalent, but the `--allowed_licenses` check may not accept a dual expression. Test before use |
+
+The Mosquitto broker is EPL-2.0 / EDL-1.0 (from memory, not verified here). Run as a separate service, not linked. Treat it the same as the Go client until checked.
+
+Open: the Keystone Go client (repo not known to this audit) is not checked.
+
 ## Updating a pin
 
 1. Pick the new commit on `master` of the upstream repo and confirm its tests pass there.

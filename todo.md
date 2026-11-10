@@ -35,7 +35,7 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 ### Licence enforcement (no Apache-only deps)
 - [x] `deny.toml` for `cargo-deny`: allowlist MIT, BSD-2/3, ISC, Zlib, Unlicense, and `MIT OR Apache-2.0` expressions; deny Apache-only, copyleft, MPL, EPL
 - [x] Go: `go-licenses` check with the same allowlist
-- [ ] Add a CI job that fails the build on any disallowed licence
+- [x] Add a CI job that fails the build on any disallowed licence (`cargo deny` gate in `.github/workflows/ci.yml`, plus a `go-licenses` job; not yet run on GitHub)
 - [ ] Audit `esp-hal` and chosen Modbus, MQTT and Postgres-driver crates and modules against the policy
 - [ ] Check licence of the Keystone Go client and of the chosen MQTT client and broker (paho is EPL/EDL; verify or pick an alternative)
 
@@ -45,7 +45,7 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 - [ ] Both repos are MIT OR Apache-2.0 (workspace level); confirm per-crate `license` fields and transitive deps (`tpt-math` from crates.io) pass `deny.toml`
 - [ ] Reuse the upstream `deny.toml`, `rust-toolchain.toml` (edition 2024, MSRV 1.85), `rustfmt.toml` and `cargo xtask` conventions as the starting point for `/edge`
 - [ ] Evaluate `tpt-eng-controls`, `tpt-eng-timeseries-*` and `tpt-eng-heat-transfer` / `-thermal-mgmt` / `-building-sys` for reuse in Phase 1 (container load model) before writing new code
-- [ ] Check that `tpt-thermo-electrolyte` (Pitzer/eNRTL/HKF) and `tpt-thermo-transport` can compute solution density and temperature-compensated EC/pH; README doesn't mention EC or pH, so record gaps as upstream issues
+- [x] Check that `tpt-thermo-electrolyte` (Pitzer/eNRTL/HKF) and `tpt-thermo-transport` can compute solution density and temperature-compensated EC/pH. Result: no. Read at rev `67c773a`: no conductivity or pH functions in the electrolyte crate; see Open questions
 - [ ] Note that only `tpt-thermo-core` is no_std; keep thermo usage on the edge PC, not the ESP32
 - [ ] Record any other missing API (IAPWS-IF97 enthalpy, mixture model) as upstream issues
 
@@ -54,7 +54,7 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 - [x] Go module skeleton: `tpt-agripod-orchestrator`, `tpt-agripod-telemetry`
 - [ ] ESP32 firmware crate skeleton (`esp-hal`, no_std)
 - [ ] CI matrix: x86_64 (NUC), aarch64 (Raspberry Pi), Jetson (aarch64) cross-builds; ESP32 target build
-- [ ] CI: `cargo fmt`, `clippy -D warnings`, `cargo test`, `go vet`, `go test -race`
+- [x] CI: `cargo fmt`, `clippy -D warnings`, `cargo test`, `go vet`, `go test -race` (defined in `ci.yml`; fmt, clippy, test, deny and vet pass locally; `-race` runs on Linux in CI)
 - [x] Windows dev setup notes (cross-compile to aarch64, espup for ESP32)
 
 ### Contracts
@@ -246,12 +246,12 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 ## Open questions & risks
 - [ ] `tpt-thermodynamics` may not cover EC/pH compensation out of the box (electrolyte crate only; unconfirmed); may need an Agripod-side model or upstream work
 - [ ] Keystone Go client: licence and API stability (Keystone is self-described as not production-hardened)
-- [ ] Choice of MQTT client and broker that satisfies the licence policy
+- [ ] Choice of MQTT client and broker that satisfies the licence policy. Audit so far (`docs/dependency-pins.md`, "Licence audit"): `rumqttc` is Apache-2.0 only and `paho-mqtt` is EPL-2.0, both denied; `minimq` (MIT, no_std) is the candidate. Decision pending, ADR needed.
 - [ ] Jetson toolchain and CI runner availability
 - [ ] Compliance and electrical safety requirements (NZ) for the container build
 - [ ] Upstream `tpt-engineering/deny.toml` allows `Apache-2.0` and `MPL-2.0`, which breaks the standing rule. Our `edge/deny.toml` does not copy them. Confirm no upstream crate pulled in via the git pin needs an exception.
 - [ ] `tpt-thermo-*` crates are not on crates.io (only `tpt-eng-props-*`, `tpt-eng-controls` and `tpt-math*` are, at 0.1.1). They are on GitHub (`tpt-solutions/tpt-thermodynamics`, master), so pin them as git dependencies by commit. The workspace and crates are `MIT OR Apache-2.0` (`license.workspace = true`) and both LICENSE files are present. GitHub's "Apache-2.0" label is only the detector picking one file.
-- [ ] Upstream `tpt-thermo-electrolyte` and `tpt-thermo-transport` do not cover EC or pH temperature/density compensation. File these as upstream issues.
+- [ ] Upstream `tpt-thermo-electrolyte` and `tpt-thermo-transport` do not cover EC or pH temperature/density compensation. Confirmed at rev `67c773a`: no conductivity or pH functions; density and residual enthalpy come from `tpt-thermo-eos-cubic`, not IAPWS-IF97. File these as upstream issues (not done: no GitHub access from here).
 - [x] `unicode-ident` is licensed `(MIT OR Apache-2.0) AND Unicode-3.0`. `Unicode-3.0` is now on the `edge/deny.toml` allow-list by maintainer decision; it is not in the original todo.md list.
 - [ ] Go licence check uses `--allowed_licenses`. A dual-licensed Go dependency may be reported as a single licence, so it could be rejected even when it is MIT OR Apache-2.0. Test this when the first real dependency is added.
 - [ ] Spec timings are for a solo maintainer; revisit after Gate 2
