@@ -114,4 +114,5 @@ jobs:
         working-directory: edge
         env:
           AGRIPOD_TEST_BROKER: 127.0.0.1:1883
-        run: cargo test -p tpt-agripod-edge --test node_link
+          AGRIPOD_TESTBROKER_BIN: ${{ runner.temp }}/testbroker
+        run: cargo test -p tpt-agripod-edge --test node_link --test outage_drill
