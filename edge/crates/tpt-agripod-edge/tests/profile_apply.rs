@@ -3,9 +3,11 @@
 //! A profile applied at runtime changes what the loop sends, and a refused profile changes
 //! nothing. Uses the same example profile the orchestrator ships.
 
+mod common;
+
 use tpt_agripod_edge::{
-    Actuators, ApplyOutcome, Command, ControlLoop, Event, Inputs, Journal, LoopConfig, Outcome,
-    ProfileStore, Sample,
+    Actuators, ApplyOutcome, Command, ControlLoop, Event, Inputs, Journal, Outcome, ProfileStore,
+    Sample,
 };
 
 const EXAMPLE: &str = include_str!("../../../../profiles/examples/example-plant-v0.json");
@@ -57,7 +59,7 @@ fn applied_profile_sets_the_pump_duty_sent_to_hardware() {
     let ApplyOutcome::Applied(active) = store.apply(EXAMPLE) else {
         panic!("example profile must apply");
     };
-    let mut l = ControlLoop::new(LoopConfig::default(), Hw::default(), Log::default()).unwrap();
+    let mut l = ControlLoop::new(&common::test_site(), Hw::default(), Log::default()).unwrap();
     l.apply_profile(&active);
 
     // The example sets pump_duty to 0.10, not the built-in 0.12.
@@ -77,7 +79,7 @@ fn refused_profile_leaves_the_loop_on_its_previous_setpoint() {
     let ApplyOutcome::Applied(active) = store.apply(EXAMPLE) else {
         panic!("example profile must apply");
     };
-    let mut l = ControlLoop::new(LoopConfig::default(), Hw::default(), Log::default()).unwrap();
+    let mut l = ControlLoop::new(&common::test_site(), Hw::default(), Log::default()).unwrap();
     l.apply_profile(&active);
 
     // A pump max above the contract is refused. The store keeps the good profile, and the

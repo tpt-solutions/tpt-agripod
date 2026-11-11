@@ -1,4 +1,4 @@
-# LED driver contract. Source: spec section 4.2 (led_dimming >= 0.8).
-# PLACEHOLDER threshold of 500 W for power headroom. Confirm against the site supply rating.
-requires: grid_power_headroom_w > 500
+# LED driver contract (spec section 4.2 gives led_dimming >= 0.8). The headroom threshold is a site
+# value: limits.led_headroom_min_w in the site file. The edge renders {led_headroom_min_w} at start-up.
+requires: grid_power_headroom_w > {led_headroom_min_w}
 ensures: led_dimming_frac >= 0.8 AND led_dimming_frac <= 1

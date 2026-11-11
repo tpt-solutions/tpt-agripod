@@ -9,13 +9,12 @@
 
 use tpt_agripod_solver::{Bindings, Contract, Decision, Rational, check_command, parse_contract};
 
-use crate::control::{IrrigationPolicy, Irrigator};
+use crate::control::Irrigator;
 use crate::estimate::{Channel, Fault, Sample};
+use crate::site::SiteConfig;
 
 /// Contract for the pump, shipped in `edge/contracts/`.
 pub const PUMP_CONTRACT: &str = include_str!("../../../contracts/pump.contract");
-/// Contract for the solenoid valve, shipped in `edge/contracts/`.
-pub const VALVE_CONTRACT: &str = include_str!("../../../contracts/solenoid.contract");
 
 /// Actuator settings for one cycle.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -121,24 +120,6 @@ pub enum Outcome {
     },
 }
 
-/// Config and tuning for the loop.
-#[derive(Debug, Clone, PartialEq)]
-pub struct LoopConfig {
-    /// Irrigation thresholds and timing.
-    pub irrigation: IrrigationPolicy,
-    /// Largest reservoir drop between cycles that is not treated as a fail-open pump, litres.
-    pub drain_limit_l: f64,
-}
-
-impl Default for LoopConfig {
-    fn default() -> Self {
-        Self {
-            irrigation: IrrigationPolicy::default(),
-            drain_limit_l: 2.0,
-        }
-    }
-}
-
 /// The edge control loop.
 pub struct ControlLoop<A: Actuators, J: Journal> {
     pump: Contract,
@@ -156,20 +137,22 @@ pub struct ControlLoop<A: Actuators, J: Journal> {
 }
 
 impl<A: Actuators, J: Journal> ControlLoop<A, J> {
-    /// Builds the loop from its config, using the contracts shipped in `edge/contracts/`.
-    pub fn new(config: LoopConfig, actuators: A, journal: J) -> Result<Self, String> {
+    /// Builds the loop for one site. The valve contract is rendered from the site's limit, so the
+    /// loop enforces the open-time limit the site file states.
+    pub fn new(site: &SiteConfig, actuators: A, journal: J) -> Result<Self, String> {
         let pump = parse_contract(PUMP_CONTRACT).map_err(|e| format!("pump contract: {e:?}"))?;
-        let valve = parse_contract(VALVE_CONTRACT).map_err(|e| format!("valve contract: {e:?}"))?;
+        let valve_text = site.valve_contract();
+        let valve = parse_contract(&valve_text).map_err(|e| format!("valve contract: {e:?}"))?;
         Ok(Self {
             pump,
             valve,
-            irrigator: Irrigator::new(config.irrigation),
+            irrigator: Irrigator::new(site.irrigation.clone()),
             // Ranges are physical limits. Moisture freezes are suspicious. Level holds still
             // legitimately, so it has no stuck check.
             moisture: Channel::new("moisture_frac", 0.0, 1.0, 30, Some(6)),
             reservoir: Channel::new("reservoir_level_l", 0.0, 500.0, 30, None),
             headroom: Channel::new("grid_power_headroom_w", 0.0, 50_000.0, 30, None),
-            drain_limit_l: config.drain_limit_l,
+            drain_limit_l: site.drain_limit_l,
             prev_level_l: None,
             last_applied: Command::SAFE,
             latched: None,

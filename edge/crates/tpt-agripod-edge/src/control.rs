@@ -26,19 +26,6 @@ pub struct IrrigationPolicy {
     pub pump_duty_frac: f64,
 }
 
-impl Default for IrrigationPolicy {
-    fn default() -> Self {
-        Self {
-            low_frac: 0.35,
-            high_frac: 0.45,
-            pulse_s: 60,
-            cooldown_s: 900,
-            cycle_s: 10.0,
-            pump_duty_frac: 0.12,
-        }
-    }
-}
-
 /// Where the controller is in its cycle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Phase {
@@ -128,9 +115,20 @@ impl Irrigator {
 mod tests {
     use super::*;
 
+    fn fixture() -> IrrigationPolicy {
+        IrrigationPolicy {
+            low_frac: 0.35,
+            high_frac: 0.45,
+            pulse_s: 60,
+            cooldown_s: 900,
+            cycle_s: 10.0,
+            pump_duty_frac: 0.12,
+        }
+    }
+
     #[test]
     fn pulses_when_dry_then_rests() {
-        let mut c = Irrigator::new(IrrigationPolicy::default());
+        let mut c = Irrigator::new(fixture());
         assert_eq!(
             c.propose(0.30, 0),
             Command {
@@ -149,7 +147,7 @@ mod tests {
 
     #[test]
     fn stops_early_when_wet_enough() {
-        let mut c = Irrigator::new(IrrigationPolicy::default());
+        let mut c = Irrigator::new(fixture());
         c.propose(0.30, 0);
         assert_eq!(c.propose(0.46, 5), Command::SAFE);
         assert!(matches!(c.phase(), Phase::Cooldown { .. }));
@@ -160,7 +158,7 @@ mod tests {
         // Called once per 10 s control cycle, as the loop does. A pulse is 60 s, so it opens
         // the valve for 6 cycles. A period is the pulse plus the 900 s cooldown, about 970 s
         // with the cycle granularity, so 10,000 s holds at most 11 periods: at most 66 open cycles.
-        let mut c = Irrigator::new(IrrigationPolicy::default());
+        let mut c = Irrigator::new(fixture());
         let mut open_cycles = 0;
         for t in (0..10_000u64).step_by(10) {
             if c.propose(0.0, t).valve_open_s > 0.0 {

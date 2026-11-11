@@ -4,9 +4,10 @@
 //! sensor loss, stuck sensor, out-of-range sensor, contract denial, actuator error, and a pump
 //! that fails open. Plus a seeded property run over random inputs.
 
+mod common;
+
 use tpt_agripod_edge::{
-    Actuators, Command, ControlLoop, Event, Fault, Inputs, IrrigationPolicy, Journal, LoopConfig,
-    Outcome, Sample,
+    Actuators, Command, ControlLoop, Event, Fault, Inputs, Journal, Outcome, Sample,
 };
 
 #[derive(Default)]
@@ -48,7 +49,7 @@ type Loop = ControlLoop<FakeActuators, VecJournal>;
 
 fn new_loop() -> Loop {
     ControlLoop::new(
-        LoopConfig::default(),
+        &crate::common::test_site(),
         FakeActuators::default(),
         VecJournal::default(),
     )
@@ -359,7 +360,7 @@ fn random_faults_never_leave_the_valve_open_without_a_passing_contract() {
                         cmd.valve_open_s
                     );
                     assert!(
-                        cmd.pump_duty_frac <= IrrigationPolicy::default().pump_duty_frac + 1e-12
+                        cmd.pump_duty_frac <= common::test_site().irrigation.pump_duty_frac + 1e-12
                     );
                     assert_eq!(last_hardware_command(&l), Some(cmd));
                 }

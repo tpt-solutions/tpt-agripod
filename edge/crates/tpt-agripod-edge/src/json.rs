@@ -70,6 +70,66 @@ impl Value {
     }
 }
 
+/// Serialises a value as compact JSON. Object members keep their order. Numbers use Rust's
+/// shortest round-trip form, so `parse(to_string(v)) == v` for every finite value.
+pub fn to_string(v: &Value) -> String {
+    let mut out = String::new();
+    write_value(v, &mut out);
+    out
+}
+
+fn write_value(v: &Value, out: &mut String) {
+    match v {
+        Value::Null => out.push_str("null"),
+        Value::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
+        Value::Number(n) => out.push_str(&format!("{n}")),
+        Value::String(s) => out.push_str(&quote(s)),
+        Value::Array(items) => {
+            out.push('[');
+            for (i, item) in items.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                write_value(item, out);
+            }
+            out.push(']');
+        }
+        Value::Object(members) => {
+            out.push('{');
+            for (i, (k, val)) in members.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                out.push_str(&quote(k));
+                out.push(':');
+                write_value(val, out);
+            }
+            out.push('}');
+        }
+    }
+}
+
+/// A JSON string literal for `s`, with the escapes RFC 8259 requires.
+pub fn quote(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            '\u{8}' => out.push_str("\\b"),
+            '\u{c}' => out.push_str("\\f"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
 /// A parse failure with the byte offset where it was found.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JsonError {

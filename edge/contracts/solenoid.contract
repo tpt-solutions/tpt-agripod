@@ -1,4 +1,5 @@
-# Solenoid valve contract. PLACEHOLDER limits: confirm against the flood study and
-# the valve datasheet before use. The ESP32 holds a separate hard-coded maximum (Phase 2).
+# Solenoid valve contract. The open-time limit is a site value: it comes from limits.valve_open_max_s
+# in the site file (edge/config/site.example.json). The edge renders {valve_open_max_s} at start-up
+# and refuses to run if the site file is missing or unfinished. See docs/phase2-edge-loop.md.
 requires: reservoir_level_l > 50
-ensures: valve_open_s <= 900
+ensures: valve_open_s <= {valve_open_max_s}

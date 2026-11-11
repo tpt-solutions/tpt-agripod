@@ -7,8 +7,18 @@ use tpt_agripod_solver::fm::{Feasibility, conjunction, decide};
 use tpt_agripod_solver::{Bindings, Decision, Phase, Rational, check_command, parse_contract};
 
 const PUMP: &str = include_str!("../../../contracts/pump.contract");
-const LED: &str = include_str!("../../../contracts/led.contract");
-const SOLENOID: &str = include_str!("../../../contracts/solenoid.contract");
+const LED_TEMPLATE: &str = include_str!("../../../contracts/led.contract");
+const SOLENOID_TEMPLATE: &str = include_str!("../../../contracts/solenoid.contract");
+
+/// The LED contract with the test site's headroom threshold (500 W).
+fn led() -> String {
+    LED_TEMPLATE.replace("{led_headroom_min_w}", "500")
+}
+
+/// The solenoid contract with the test site's open-time limit (900 s).
+fn solenoid() -> String {
+    SOLENOID_TEMPLATE.replace("{valve_open_max_s}", "900")
+}
 
 fn bind(pairs: &[(&str, &str)]) -> Bindings {
     let mut b = Bindings::new();
@@ -20,16 +30,20 @@ fn bind(pairs: &[(&str, &str)]) -> Bindings {
 
 #[test]
 fn all_shipped_contracts_parse() {
-    for text in [PUMP, LED, SOLENOID] {
-        parse_contract(text).unwrap();
+    for text in [PUMP.to_string(), led(), solenoid()] {
+        parse_contract(&text).unwrap();
     }
 }
 
 #[test]
 fn no_shipped_ensures_clause_is_contradictory() {
     // Lint: the ensures clause alone must be satisfiable, or no command could ever pass it.
-    for (name, text) in [("pump", PUMP), ("led", LED), ("solenoid", SOLENOID)] {
-        let c = parse_contract(text).unwrap();
+    for (name, text) in [
+        ("pump", PUMP.to_string()),
+        ("led", led()),
+        ("solenoid", solenoid()),
+    ] {
+        let c = parse_contract(&text).unwrap();
         let sys = conjunction(&c.ensures).unwrap_or_else(|e| panic!("{name}: {e:?}"));
         assert_eq!(
             decide(&sys, 10_000),
@@ -99,7 +113,7 @@ fn pump_contract_is_fail_closed_without_a_sensor() {
 
 #[test]
 fn led_contract_bounds_dimming_on_both_sides() {
-    let c = parse_contract(LED).unwrap();
+    let c = parse_contract(&led()).unwrap();
     let state = bind(&[("grid_power_headroom_w", "1000")]);
     for (v, ok) in [("0.79", false), ("0.8", true), ("1", true), ("1.01", false)] {
         let decision = check_command(&c, &state, &bind(&[("led_dimming_frac", v)]));

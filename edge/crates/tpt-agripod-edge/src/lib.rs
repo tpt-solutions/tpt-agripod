@@ -13,9 +13,14 @@ pub mod control;
 pub mod cycle;
 pub mod estimate;
 pub mod json;
+pub mod link;
+pub mod node;
 pub mod profile;
+pub mod site;
 
 pub use control::{IrrigationPolicy, Irrigator, Phase};
-pub use cycle::{Actuators, Command, ControlLoop, Event, Inputs, Journal, LoopConfig, Outcome};
+pub use cycle::{Actuators, Command, ControlLoop, Event, Inputs, Journal, Outcome};
 pub use estimate::{Channel, Fault, Sample};
+pub use node::{Node, NodeConfig, Outbound, SensorSource};
 pub use profile::{ActiveProfile, ApplyOutcome, ProfileStore};
+pub use site::SiteConfig;

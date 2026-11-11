@@ -1,0 +1,20 @@
+{
+  "status": "example",
+  "_comment": "Copy this file to a site file, set every value from the site survey, and change status to production. The edge refuses this file.",
+  "site_id": "wgtn-bay-01",
+  "node_id": "nuc-01",
+  "broker": "127.0.0.1:1883",
+  "limits": {
+    "valve_open_max_s": 900,
+    "led_headroom_min_w": 500
+  },
+  "irrigation": {
+    "moisture_low_frac": 0.35,
+    "moisture_high_frac": 0.45,
+    "pulse_s": 60,
+    "cooldown_s": 900,
+    "cycle_s": 10,
+    "pump_duty_frac": 0.12
+  },
+  "drain_limit_l": 2.0
+}
