@@ -1,5 +1,6 @@
 {
-  "_comment": "PLACEHOLDER stage durations for a 120-day cycle. Not agronomic advice. Replace per crop profile once profiles carry stage lists.",
+  "_status": "example",
+  "_comment": "EXAMPLE stage durations for a 120-day cycle. Not agronomic advice. Copy this file, set the agreed durations, and remove _status. The orchestrator refuses this file.",
   "stages": [
     { "name": "germination", "days": 7 },
     { "name": "seedling", "days": 14 },

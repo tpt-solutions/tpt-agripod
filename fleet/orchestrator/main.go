@@ -132,15 +132,25 @@ func parseNow(s string) (time.Time, error) {
 	return t.UTC(), nil
 }
 
+// loadTemplate reads a stage template. A file marked "_status": "example" is refused: its
+// durations are illustrative, and a cycle must be built from the agreed crop schedule.
 func loadTemplate(path string) (cycle.Template, error) {
 	var tpl cycle.Template
+	var file struct {
+		Status string `json:"_status"`
+		cycle.Template
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return tpl, err
 	}
-	if err := json.Unmarshal(data, &tpl); err != nil {
+	if err := json.Unmarshal(data, &file); err != nil {
 		return tpl, fmt.Errorf("template %s: %w", path, err)
 	}
+	if file.Status == "example" {
+		return tpl, fmt.Errorf("template %s is the example template; copy it and set the agreed durations (remove _status)", path)
+	}
+	tpl = file.Template
 	return tpl, tpl.Validate()
 }
 
