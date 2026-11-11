@@ -47,11 +47,12 @@ Checked against the policy in `todo.md` (MIT, BSD-2/3, ISC, Zlib, Unlicense, or 
 | `mqtt-protocol` | MQTT codec | MIT/Apache-2.0 | Allowed. Candidate |
 | `tokio-postgres` | Postgres driver (Rust, if needed) | MIT OR Apache-2.0 | Allowed |
 | `pgx` (Go) | Postgres driver for telemetry to Keystone | MIT | Allowed |
+| Keystone Go SDK (`tpt-keystone-db/sdk-go`) | Telemetry writes to Keystone (ADR 0009) | Standard library only. Root licence `LICENSE-MIT` and `LICENSE-APACHE` (GitHub reports NOASSERTION) | Allowed. Not yet imported |
 | `eclipse/paho.mqtt.golang` (Go) | MQTT client (fleet) | EPL-2.0 / EDL-1.0 per `todo.md` | **Not verified here.** The EDL-1.0 option is BSD-3-equivalent, but the `--allowed_licenses` check may not accept a dual expression. Test before use |
 
 The Mosquitto broker is EPL-2.0 / EDL-1.0 (from memory, not verified here). Run as a separate service, not linked. Treat it the same as the Go client until checked.
 
-Open: the Keystone Go client (repo not known to this audit) is not checked.
+Keystone Go client: `github.com/tpt-solutions/tpt-keystone-db/sdk-go` (see the row above). Checked; not yet imported. Its module path is `github.com/tpt/sdk-go`, which needs resolving before import (ADR 0009).
 
 ## Updating a pin
 

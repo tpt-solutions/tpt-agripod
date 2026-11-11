@@ -37,7 +37,7 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 - [x] Go: `go-licenses` check with the same allowlist
 - [x] Add a CI job that fails the build on any disallowed licence (`cargo deny` gate in `.github/workflows/ci.yml`, plus a `go-licenses` job; not yet run on GitHub)
 - [ ] Audit `esp-hal` and chosen Modbus, MQTT and Postgres-driver crates and modules against the policy
-- [ ] Check licence of the Keystone Go client and of the chosen MQTT client and broker (paho is EPL/EDL; verify or pick an alternative). MQTT part done (ADR 0006, 0007: all MIT). Keystone Go client still unidentified: no repo or module path is in the repo or the spec
+- [x] Check licence of the Keystone Go client and of the chosen MQTT client and broker (paho is EPL/EDL; verify or pick an alternative). MQTT: ADR 0006, 0007, all MIT. Keystone Go SDK (`tpt-keystone-db/sdk-go`): standard library only, MIT OR Apache-2.0 (`docs/dependency-pins.md`). Its module path needs resolving before import (ADR 0009)
 
 ### Upstream TPT crates
 - [x] Locate upstream: `tpt-solutions/tpt-engineering` (43 crates; includes `tpt-eng-props-air`, `tpt-eng-props-water`, `tpt-eng-props-mixture`, `tpt-eng-controls`, `tpt-eng-timeseries-*`; all `tpt-eng-props-*` are no_std) and `tpt-solutions/tpt-thermodynamics` (`tpt-thermo-*`, 12 crates)
@@ -125,12 +125,12 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 ## Phase 3: Full Stack Integration (wk 13-20)
 
 ### Orchestrator (Go)
-- [ ] State machine for the ~120-day grow cycle (stages, transitions, timers, manual overrides)
-- [ ] Persistent state (file or embedded store with a permissive licence)
-- [ ] Crop Profile loader and validator (JSON Schema)
-- [ ] MQTT client and profile push to edge nodes; ack, retry and version tracking
-- [ ] Node registry, health and last-will handling
-- [ ] Lettuce profile v1 and Potato profile v1
+- [x] State machine for the ~120-day grow cycle (stages, transitions, timers, manual overrides). Stage durations are a placeholder template
+- [x] Persistent state (file or embedded store with a permissive licence). Atomic JSON file, no database
+- [ ] Crop Profile loader and validator (JSON Schema). Partial: hand-written check of the schema's rules, unknown fields rejected, pump limit checked against the edge contract. Not a full JSON Schema validator
+- [ ] MQTT client and profile push to edge nodes; ack, retry and version tracking. Not started: needs `gmqtt` added to `go.mod` (ADR 0007)
+- [ ] Node registry, health and last-will handling. Not started
+- [ ] Lettuce profile v1 and Potato profile v1. Not started: agronomic inputs needed, not invented here
 
 ### Edge (Rust)
 - [ ] MQTT client (permissive licence), TLS and auth
@@ -145,11 +145,11 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 - [ ] Nutrient mixture model: EC and pH temperature and density compensation (`tpt-thermodynamics`)
 
 ### Telemetry (Go)
-- [ ] `tpt-agripod-telemetry`: ingest from MQTT, batch, back-pressure
-- [ ] Sink interface (pluggable) with stdout/file sink for tests
-- [ ] Keystone DB sink: Postgres wire protocol, `COPY` bulk path, `USING TIME` (Chronos) table schema
-- [ ] Retention and rollup policy for sensor series
-- [ ] Dedup and idempotent writes after reconnect
+- [ ] `tpt-agripod-telemetry`: ingest from MQTT, batch, back-pressure. Partial: batching and bounded back-pressure done; ingest reads JSON Lines from stdin, not MQTT
+- [x] Sink interface (pluggable) with file and in-memory sinks for tests (no stdout sink as such; `-out` takes a file path)
+- [ ] Keystone DB sink: Postgres wire protocol, `COPY` bulk path, `USING TIME` (Chronos) table schema. Partial: batched INSERT, transactions and the `USING TIME` DDL are written. No `COPY` (SDK lacks it, ADR 0009). Not run against a live server. SDK not yet imported
+- [ ] Retention and rollup policy for sensor series. Partial: retention is a placeholder parameter in the DDL. No rollup
+- [x] Dedup and idempotent writes after reconnect. Resent points collide on `(node, metric, ts)` and are skipped. Tested against a fake that enforces the key; live check pending (ADR 0009)
 
 ### Integration
 - [ ] End-to-end test: orchestrator pushes profile, edge applies it, telemetry lands in Keystone
@@ -245,7 +245,7 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 
 ## Open questions & risks
 - [ ] `tpt-thermodynamics` may not cover EC/pH compensation out of the box (electrolyte crate only; unconfirmed); may need an Agripod-side model or upstream work
-- [ ] Keystone Go client: licence and API stability (Keystone is self-described as not production-hardened)
+- [ ] Keystone Go client: licence resolved (MIT OR Apache-2.0, stdlib only). Still open: API stability (Keystone is self-described as not production-hardened), the SDK's module path (`github.com/tpt/sdk-go`) not matching its repo, no `COPY`, and no SQLSTATE on errors. See ADR 0009
 - [x] Choice of MQTT client and broker that satisfies the licence policy. Decided: edge client `minimq` (ADR 0006); fleet client `gmqtt` and fleet broker `mochi-mqtt/server`, both MIT (ADR 0007). Neither is added to a `Cargo.toml` or `go.mod` yet.
 - [ ] Jetson toolchain and CI runner availability
 - [ ] Compliance and electrical safety requirements (NZ) for the container build

@@ -16,6 +16,7 @@ Status values: `Proposed`, `Accepted`, `Superseded by NNNN`.
 | [0006](0006-edge-mqtt-client-minimq.md) | Edge MQTT client is minimq, with std-embedded-nal for Linux TCP | Accepted |
 | [0007](0007-fleet-mqtt-client-and-broker.md) | Fleet MQTT client is gmqtt; fleet broker is mochi-mqtt | Accepted |
 | [0008](0008-fourier-motzkin-first-decision-procedure.md) | Fourier–Motzkin as the first decision procedure; simplex to follow | Accepted |
+| [0009](0009-keystone-write-path.md) | Keystone write path: batched INSERT now, COPY after the SDK gains it | Accepted |
 
 ## Template
 
