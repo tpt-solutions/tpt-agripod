@@ -1,0 +1,37 @@
+{
+  "schema_version": "0",
+  "kind": "plant",
+  "profile_id": "example-plant",
+  "profile_version": "0.1.0",
+  "name": "Example plant profile (illustrative, not a validated recipe)",
+  "cartridge_types": ["C"],
+  "targets": {
+    "vpd_kpa": { "min": 0.8, "max": 1.0 },
+    "dli_mol_m2_day": 14,
+    "photoperiod_h": 16,
+    "root_zone_temp_c": { "min": 18, "max": 22 },
+    "npk_ratio": { "n": 3, "p": 1, "k": 3 },
+    "ec_s_m": { "min": 0.12, "max": 0.20 },
+    "ph": { "min": 5.8, "max": 6.2 }
+  },
+  "drip_schedule": {
+    "interval_min": 15,
+    "volume_l": 0.05
+  },
+  "controls": {
+    "pump_duty": {
+      "value": 0.10,
+      "unit": "frac",
+      "min": 0,
+      "max": 0.15,
+      "contract_ref": "flood-prevention.pump-duty"
+    },
+    "led_dimming": {
+      "value": 0.9,
+      "unit": "frac",
+      "min": 0.8,
+      "max": 1.0,
+      "contract_ref": "led-dimming.limit"
+    }
+  }
+}

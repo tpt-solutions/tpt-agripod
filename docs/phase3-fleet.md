@@ -77,7 +77,7 @@ the maintainer deciding what Phase 3 gates on.
 | The `agripod-edged` daemon | Not built | Needs the sensor and actuator drivers (device register maps from datasheets). Without them a daemon would only ever report safe state |
 | LED dimming loop | Not started | No LED actuator exists to drive |
 | Profile targets feeding controllers | Not started | No controller consumes VPD or DLI targets yet |
-| Full JSON Schema validation | Not done | Both sides check the schema's rules by hand. A shared test-vector file would keep them in step |
+| Full JSON Schema validation | Not done | Both sides check the schema's rules by hand. Shared vectors (`profiles/testvectors`, 18 cases) keep them in step; the vectors cover the rules, not every JSON Schema keyword |
 | Live Keystone test | Written, not run | `keystone_live_test.go` needs a running Keystone (`KEYSTONE_ADDR`). This environment has none |
 | Keystone `COPY` bulk path | Not built | The SDK has no COPY sub-protocol (ADR 0009) |
 | Reservoir thermal model, predictive scheduling, nutrient mixture model | Not started | Phase 3 physics items |

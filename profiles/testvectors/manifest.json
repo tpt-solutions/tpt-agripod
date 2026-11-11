@@ -1,0 +1,24 @@
+{
+  "_comment": "Shared profile test vectors. The Go orchestrator validator and the Rust edge validator must both accept every valid case and reject every invalid case. 'mentions' is a substring the rejection must contain.",
+  "cases": [
+    { "file": "valid/example.json", "valid": true },
+    { "file": "valid/led-only.json", "valid": true },
+    { "file": "valid/no-description.json", "valid": true },
+    { "file": "invalid/kind-culture.json", "valid": false, "mentions": "kind" },
+    { "file": "invalid/kind-unknown.json", "valid": false, "mentions": "kind" },
+    { "file": "invalid/schema-version.json", "valid": false, "mentions": "schema_version" },
+    { "file": "invalid/unknown-top-field.json", "valid": false, "mentions": "surprise" },
+    { "file": "invalid/bad-profile-id.json", "valid": false, "mentions": "profile_id" },
+    { "file": "invalid/bad-version.json", "valid": false, "mentions": "profile_version" },
+    { "file": "invalid/bad-cartridge.json", "valid": false, "mentions": "cartridge" },
+    { "file": "invalid/pump-max-over-contract.json", "valid": false, "mentions": "pump" },
+    { "file": "invalid/pump-value-over-max.json", "valid": false, "mentions": "value" },
+    { "file": "invalid/led-value-over-one.json", "valid": false, "mentions": "led_dimming" },
+    { "file": "invalid/vpd-min-above-max.json", "valid": false, "mentions": "vpd_kpa" },
+    { "file": "invalid/ph-out-of-range.json", "valid": false, "mentions": "ph" },
+    { "file": "invalid/unknown-control.json", "valid": false, "mentions": "pump_speed" },
+    { "file": "invalid/drip-unknown-field.json", "valid": false, "mentions": "extra" },
+    { "file": "invalid/control-no-unit.json", "valid": false, "mentions": "unit" },
+    { "file": "invalid/no-targets.json", "valid": false }
+  ]
+}

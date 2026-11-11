@@ -1,0 +1,29 @@
+{
+  "schema_version": "0",
+  "kind": "plant",
+  "profile_id": "example-plant",
+  "profile_version": "0.1.0",
+  "name": "Example plant profile (illustrative, not a validated recipe)",
+  "description": "Used to exercise the schema. Values are placeholders, not agronomic advice. A validated lettuce profile is a Phase 3 deliverable.",
+  "cartridge_types": ["C"],
+  "drip_schedule": {
+    "interval_min": 15,
+    "volume_l": 0.05
+  },
+  "controls": {
+    "pump_duty": {
+      "value": 0.10,
+      "unit": "frac",
+      "min": 0,
+      "max": 0.15,
+      "contract_ref": "flood-prevention.pump-duty"
+    },
+    "led_dimming": {
+      "value": 0.9,
+      "unit": "frac",
+      "min": 0.8,
+      "max": 1.0,
+      "contract_ref": "led-dimming.limit"
+    }
+  }
+}
