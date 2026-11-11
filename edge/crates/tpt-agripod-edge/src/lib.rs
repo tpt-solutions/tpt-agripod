@@ -12,7 +12,10 @@
 pub mod control;
 pub mod cycle;
 pub mod estimate;
+pub mod json;
+pub mod profile;
 
 pub use control::{IrrigationPolicy, Irrigator, Phase};
 pub use cycle::{Actuators, Command, ControlLoop, Event, Inputs, Journal, LoopConfig, Outcome};
 pub use estimate::{Channel, Fault, Sample};
+pub use profile::{ActiveProfile, ApplyOutcome, ProfileStore};

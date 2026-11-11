@@ -110,6 +110,12 @@ impl Irrigator {
         }
     }
 
+    /// Sets the pump duty proposed while pulsing. The caller has validated it against the pump
+    /// contract (the profile module does this).
+    pub fn set_pump_duty_frac(&mut self, frac: f64) {
+        self.policy.pump_duty_frac = frac;
+    }
+
     fn open(&self) -> Command {
         Command {
             valve_open_s: self.policy.cycle_s,

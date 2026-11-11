@@ -288,6 +288,12 @@ impl<A: Actuators, J: Journal> ControlLoop<A, J> {
         self.journal.record(Event::Reset);
     }
 
+    /// Applies the setpoints of a validated profile. The pump duty takes effect on the next pulse.
+    /// Only a profile that passed `profile::validate` may be passed here.
+    pub fn apply_profile(&mut self, profile: &crate::profile::ActiveProfile) {
+        self.irrigator.set_pump_duty_frac(profile.pump_duty_frac);
+    }
+
     /// Whether the loop is latched.
     pub fn is_latched(&self) -> bool {
         self.latched.is_some()
