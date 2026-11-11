@@ -128,15 +128,15 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 - [x] State machine for the ~120-day grow cycle (stages, transitions, timers, manual overrides). Stage durations are a placeholder template
 - [x] Persistent state (file or embedded store with a permissive licence). Atomic JSON file, no database
 - [ ] Crop Profile loader and validator (JSON Schema). Partial: hand-written check of the schema's rules, unknown fields rejected, pump limit checked against the edge contract. Not a full JSON Schema validator
-- [ ] MQTT client and profile push to edge nodes; ack, retry and version tracking. Not started: needs `gmqtt` added to `go.mod` (ADR 0007)
-- [ ] Node registry, health and last-will handling. Not started
+- [x] MQTT client and profile push to edge nodes; ack, retry and version tracking. Push waits for the matching ack, retries with the same `msg_id`, and records each node's applied profile. Tested over a real broker (mochi-mqtt, in-process). Client is `yosssi/gmq` (ADR 0007, corrected by ADR 0010). The edge side is not on MQTT yet, so this has only been run against a fake edge
+- [ ] Node registry, health and last-will handling. Partial: status tracking, retained last-will and silence detection are tested over a broker. Nothing acts on a silent node yet
 - [ ] Lettuce profile v1 and Potato profile v1. Not started: agronomic inputs needed, not invented here
 
 ### Edge (Rust)
-- [ ] MQTT client (permissive licence), TLS and auth
-- [ ] Apply a Crop Profile at runtime: targets feed controllers and contracts (no recompile)
-- [ ] Offline operation: continue on the last profile; buffer telemetry to disk; resync on reconnect
-- [ ] Profile validation on the edge (reject unsafe or malformed profiles)
+- [ ] MQTT client (permissive licence), TLS and auth. Not started on the edge: `minimq` is chosen (ADR 0006) but not added. TLS and auth are not started
+- [ ] Apply a Crop Profile at runtime: targets feed controllers and contracts (no recompile). Partial: the pump duty setpoint is applied to irrigation and checked by the contract. The LED dimming value is stored, but no LED loop uses it, and the targets do not feed anything yet
+- [ ] Offline operation: continue on the last profile; buffer telemetry to disk; resync on reconnect. Partial: the loop runs without the fleet link (it never needs one). No telemetry buffer yet
+- [x] Profile validation on the edge (reject unsafe or malformed profiles). Own strict JSON parser (ADR 0011). Mirrors the schema's rules, including unknown-field rejection, and reads the pump limit from the shipped contract. A refused profile keeps the previous one active
 
 ### Physics integration
 - [ ] Real-time VPD from the sensor array (`tpt-eng-props-air`)
@@ -145,7 +145,7 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 - [ ] Nutrient mixture model: EC and pH temperature and density compensation (`tpt-thermodynamics`)
 
 ### Telemetry (Go)
-- [ ] `tpt-agripod-telemetry`: ingest from MQTT, batch, back-pressure. Partial: batching and bounded back-pressure done; ingest reads JSON Lines from stdin, not MQTT
+- [x] `tpt-agripod-telemetry`: ingest from MQTT, batch, back-pressure. Ingest subscribes to `agripod/+/+/telemetry` at QoS 1, drops duplicate `msg_id`s, counts sequence gaps, and skips non-good samples. Tested over a broker. A message is acked when received, not when stored. Crashes are visible as seq gaps
 - [x] Sink interface (pluggable) with file and in-memory sinks for tests (no stdout sink as such; `-out` takes a file path)
 - [ ] Keystone DB sink: Postgres wire protocol, `COPY` bulk path, `USING TIME` (Chronos) table schema. Partial: batched INSERT, transactions and the `USING TIME` DDL are written. No `COPY` (SDK lacks it, ADR 0009). Not run against a live server. SDK not yet imported
 - [ ] Retention and rollup policy for sensor series. Partial: retention is a placeholder parameter in the DDL. No rollup

@@ -47,8 +47,17 @@ Checked against the policy in `todo.md` (MIT, BSD-2/3, ISC, Zlib, Unlicense, or 
 | `mqtt-protocol` | MQTT codec | MIT/Apache-2.0 | Allowed. Candidate |
 | `tokio-postgres` | Postgres driver (Rust, if needed) | MIT OR Apache-2.0 | Allowed |
 | `pgx` (Go) | Postgres driver for telemetry to Keystone | MIT | Allowed |
+| `yosssi/gmq` v0.0.1 (Go) | Fleet MQTT client (ADR 0010) | MIT. Stale since 2018; behind one file | Allowed |
+| `mochi-mqtt/server/v2` v2.7.9 (Go) | In-process broker for tests only | MIT | Allowed. Test-only, so not in the shipped build |
+| `gorilla/websocket` v1.5.0 (Go) | Transitive, via mochi | BSD-2-Clause | Allowed |
+| `rs/xid` v1.4.0 (Go) | Transitive, via mochi | MIT | Allowed |
+| `jinzhu/copier` v0.3.5 (Go) | Transitive, via mochi | MIT (`License` file in module) | Allowed |
+| `gopkg.in/check.v1` (Go) | Transitive, via mochi | BSD-2-Clause style (gocheck) | Allowed |
+| `gopkg.in/yaml.v3` v3.0.1 (Go) | Transitive, via mochi | MIT and Apache-2.0 (dual) | Allowed |
+| `json` 0.12.4 (Rust) | Considered for profile parsing | MIT/Apache-2.0, but RUSTSEC-2022-0081 (unmaintained, soundness issue) | **Denied** (ADR 0011) |
+| `serde_json` / `miniserde` (Rust) | Considered for profile parsing | MIT OR Apache-2.0, but depend on `ryu` (Apache-2.0 OR BSL-1.0) | **Denied** (ADR 0011) |
 | Keystone Go SDK (`tpt-keystone-db/sdk-go`) | Telemetry writes to Keystone (ADR 0009) | Standard library only. Root licence `LICENSE-MIT` and `LICENSE-APACHE` (GitHub reports NOASSERTION) | Allowed. Not yet imported |
-| `eclipse/paho.mqtt.golang` (Go) | MQTT client (fleet) | EPL-2.0 / EDL-1.0 per `todo.md` | **Not verified here.** The EDL-1.0 option is BSD-3-equivalent, but the `--allowed_licenses` check may not accept a dual expression. Test before use |
+| `eclipse/paho.mqtt.golang` (Go) | Considered, not used | EPL-2.0 / EDL-1.0 | **Excluded** by policy (ADR 0010) |
 
 The Mosquitto broker is EPL-2.0 / EDL-1.0 (from memory, not verified here). Run as a separate service, not linked. Treat it the same as the Go client until checked.
 

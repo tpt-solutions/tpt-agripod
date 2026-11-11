@@ -14,9 +14,11 @@ Status values: `Proposed`, `Accepted`, `Superseded by NNNN`.
 | [0004](0004-esp32-leaf-tier.md) | ESP32 as a leaf tier behind the Rust edge node | Accepted |
 | [0005](0005-keystone-telemetry-sink.md) | TPT Keystone as the telemetry sink | Accepted |
 | [0006](0006-edge-mqtt-client-minimq.md) | Edge MQTT client is minimq, with std-embedded-nal for Linux TCP | Accepted |
-| [0007](0007-fleet-mqtt-client-and-broker.md) | Fleet MQTT client is gmqtt; fleet broker is mochi-mqtt | Accepted |
+| [0007](0007-fleet-mqtt-client-and-broker.md) | Fleet MQTT client and broker (client half superseded by 0010) | Accepted |
 | [0008](0008-fourier-motzkin-first-decision-procedure.md) | Fourier–Motzkin as the first decision procedure; simplex to follow | Accepted |
 | [0009](0009-keystone-write-path.md) | Keystone write path: batched INSERT now, COPY after the SDK gains it | Accepted |
+| [0010](0010-fleet-mqtt-client-correction.md) | Fleet MQTT client is yosssi/gmq; gmqtt is broker-only (corrects ADR 0007) | Accepted |
+| [0011](0011-edge-json-parser.md) | Edge profile parsing uses an in-house strict JSON parser | Accepted |
 
 ## Template
 
