@@ -19,7 +19,7 @@
 
 use tpt_eng_building_sys::{envelope_ua, infiltration_loss_ach_w, transmission_heat_rate};
 
-use crate::params::SimParams;
+use crate::params::{SimParams, Tariff};
 use crate::plant::{Canopy, transpiration_kg_s};
 use crate::psychro::{CP_DRY_AIR, air_density, humidity_ratio, latent_heat_j_kg, vpd_kpa};
 use crate::sensor::Sample;
@@ -131,6 +131,7 @@ pub fn interval(
     b: &Sample,
     p: &SimParams,
     canopy: &Canopy,
+    tariff: &Tariff,
 ) -> Result<Interval, String> {
     // One assembly of area A and U = 1/RSI, with bridging applied to the area.
     let ua = envelope_ua(&[(p.envelope_area_m2 * p.bridging_factor, 1.0 / p.envelope_rsi)]);
@@ -183,7 +184,7 @@ pub fn interval(
 
     Ok(Interval {
         dt_s,
-        offpeak: p.is_offpeak(mid_ts),
+        offpeak: tariff.is_offpeak(mid_ts, p.utc_offset_h),
         vpd_kpa: vpd,
         transpiration_kg_s: transp,
         plant_latent_w: transp * h,
@@ -205,6 +206,9 @@ pub fn interval(
 /// Integrates the model over a run of accepted samples and returns the totals.
 pub fn simulate(samples: &[Sample], p: &SimParams) -> Result<Summary, String> {
     p.validate()?;
+    let tariff = p.tariff.as_ref().ok_or_else(|| {
+        "no electricity tariff set; the simulation refuses to run without one".to_string()
+    })?;
     if samples.len() < 2 {
         return Err("need at least two valid samples to integrate energy".into());
     }
@@ -233,7 +237,7 @@ pub fn simulate(samples: &[Sample], p: &SimParams) -> Result<Summary, String> {
             s.gap_intervals += 1;
             continue;
         }
-        let iv = interval(a, b, p, &canopy)?;
+        let iv = interval(a, b, p, &canopy, tariff)?;
         let kwh = |w: f64| w * iv.dt_s / J_PER_KWH;
 
         s.intervals += 1;
@@ -257,10 +261,10 @@ pub fn simulate(samples: &[Sample], p: &SimParams) -> Result<Summary, String> {
         s.hvac_kwh += hvac;
         if iv.offpeak {
             s.hvac_offpeak_kwh += hvac;
-            s.hvac_cost_offpeak_nzd += hvac * p.tariff_offpeak_nzd_kwh;
+            s.hvac_cost_offpeak_nzd += hvac * tariff.offpeak_nzd_kwh;
         } else {
             s.hvac_peak_kwh += hvac;
-            s.hvac_cost_peak_nzd += hvac * p.tariff_peak_nzd_kwh;
+            s.hvac_cost_peak_nzd += hvac * tariff.peak_nzd_kwh;
         }
 
         s.closure_residual_kwh += kwh(iv.heat_gained_w - iv.hvac_heat_removed_w).abs();
@@ -283,6 +287,23 @@ pub fn simulate(samples: &[Sample], p: &SimParams) -> Result<Summary, String> {
 mod tests {
     use super::*;
     use crate::time::parse_rfc3339_utc;
+
+    // Test fixtures, not defaults: production code requires the caller to supply a tariff.
+    fn test_tariff() -> Tariff {
+        Tariff {
+            peak_nzd_kwh: 0.30,
+            offpeak_nzd_kwh: 0.15,
+            offpeak_start_h: 21.0,
+            offpeak_end_h: 7.0,
+        }
+    }
+
+    fn params() -> SimParams {
+        SimParams {
+            tariff: Some(test_tariff()),
+            ..SimParams::default()
+        }
+    }
 
     fn sample(ts: &str, temp_c: f64, rh: f64, power_w: f64, amb: Option<f64>) -> Sample {
         Sample {
@@ -311,14 +332,14 @@ mod tests {
     fn energy_books_balance_across_heating_and_cooling_cases() {
         // Sweeps ambient and process load so both the cooling and heating branches run,
         // and both humidifying and dehumidifying cases occur.
-        let p = SimParams::default();
+        let p = params();
         let c = canopy(&p);
         for amb in [-5.0, 5.0, 15.0, 30.0] {
             for power in [0.0, 300.0, 1800.0] {
                 for rh in [0.2, 0.6, 0.95] {
                     let a = sample("2026-01-01T06:00:00Z", 20.0, rh, power, Some(amb));
                     let b = sample("2026-01-01T06:05:00Z", 20.0, rh, power, Some(amb));
-                    let iv = interval(&a, &b, &p, &c).unwrap();
+                    let iv = interval(&a, &b, &p, &c, &test_tariff()).unwrap();
                     let scale = iv.heat_gained_w.abs().max(1.0);
                     assert!(
                         (iv.heat_gained_w - iv.hvac_heat_removed_w).abs() / scale < 1e-9,
@@ -333,12 +354,12 @@ mod tests {
 
     #[test]
     fn lights_off_at_night_means_no_transpiration_and_no_latent_removal() {
-        let p = SimParams::default();
+        let p = params();
         let c = canopy(&p);
         // 23:00 local (11:00 UTC): lights are off.
         let a = sample("2026-01-01T11:00:00Z", 18.0, 0.7, 150.0, Some(12.0));
         let b = sample("2026-01-01T11:05:00Z", 18.0, 0.7, 150.0, Some(12.0));
-        let iv = interval(&a, &b, &p, &c).unwrap();
+        let iv = interval(&a, &b, &p, &c, &test_tariff()).unwrap();
         assert_eq!(iv.transpiration_kg_s, 0.0);
         assert_eq!(iv.plant_latent_w, 0.0);
         // The moisture left is only make-up air, so the removal must match it exactly.
@@ -347,11 +368,11 @@ mod tests {
 
     #[test]
     fn hotter_outside_adds_envelope_heat() {
-        let p = SimParams::default();
+        let p = params();
         let c = canopy(&p);
         let a = sample("2026-01-01T06:00:00Z", 20.0, 0.6, 0.0, Some(30.0));
         let b = sample("2026-01-01T06:05:00Z", 20.0, 0.6, 0.0, Some(30.0));
-        let iv = interval(&a, &b, &p, &c).unwrap();
+        let iv = interval(&a, &b, &p, &c, &test_tariff()).unwrap();
         // UA = 144 × 1.05 / 5.28 = 28.64 W/K; ΔT = 10 K gives 286 W.
         assert!(
             (iv.envelope_w - 286.4).abs() < 0.5,
@@ -364,7 +385,7 @@ mod tests {
     #[test]
     fn full_day_simulation_has_sane_totals() {
         // 100 potatoes, 1 day, steady 20 °C / 60 % RH, 15 °C outside, 150 W process load.
-        let p = SimParams::default();
+        let p = params();
         let step = 300;
         let start = parse_rfc3339_utc("2026-01-01T12:00:00Z").unwrap(); // 00:00 local
         let samples: Vec<Sample> = (0..=288)
@@ -398,7 +419,7 @@ mod tests {
 
     #[test]
     fn gaps_are_skipped_not_integrated() {
-        let p = SimParams::default();
+        let p = params();
         let start = parse_rfc3339_utc("2026-01-01T12:00:00Z").unwrap();
         let mk = |ts: i64| Sample {
             ts_s: ts,
@@ -424,7 +445,7 @@ mod tests {
 
     #[test]
     fn rejects_too_few_samples() {
-        let p = SimParams::default();
+        let p = params();
         let one = [sample("2026-01-01T00:00:00Z", 20.0, 0.6, 0.0, None)];
         assert!(simulate(&one, &p).is_err());
     }

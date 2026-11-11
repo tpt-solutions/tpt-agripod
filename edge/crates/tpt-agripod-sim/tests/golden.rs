@@ -38,7 +38,16 @@ fn one_day_seed_42_human_report() {
         ..mock::MockSpec::default()
     });
     let ingest = parse_csv(&csv).unwrap();
-    let p = SimParams::default();
+    let p = SimParams {
+        // Test fixture tariff, pinned so the golden report is stable.
+        tariff: Some(tpt_agripod_sim::params::Tariff {
+            peak_nzd_kwh: 0.30,
+            offpeak_nzd_kwh: 0.15,
+            offpeak_start_h: 21.0,
+            offpeak_end_h: 7.0,
+        }),
+        ..SimParams::default()
+    };
     let summary = simulate(&ingest.samples, &p).unwrap();
     check_golden(
         "day1-seed42.human.txt",

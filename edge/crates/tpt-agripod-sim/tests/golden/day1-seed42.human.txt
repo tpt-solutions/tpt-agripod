@@ -21,7 +21,7 @@ HVAC electricity (kWh)
   Dehumidification:    67.25
   Total HVAC:          77.12
 
-HVAC cost (NZD; placeholder tariff 0.30 peak / 0.15 off-peak per kWh)
+HVAC cost (NZD; tariff peak 0.30, off-peak 0.15 per kWh)
   Off-peak:            9.94 kWh, $1.49
   Peak:                67.18 kWh, $20.15
   Total:               $21.65

@@ -2,8 +2,50 @@
 
 //! Model parameters for the Phase 1 container simulation.
 //!
-//! Every default is an assumption, not a measurement. The basis for each is in
-//! `docs/phase1-model.md`. Replace them with measured values as the hardware arrives.
+//! Physical and crop assumptions have defaults, documented in `docs/phase1-model.md`. Replace
+//! them with measured values as the hardware arrives. The electricity tariff has no default: it
+//! is a site fact, and the simulation refuses to run without one.
+
+/// Electricity tariff: a peak price, an off-peak price, and the off-peak window.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Tariff {
+    /// Price in the peak band, NZD per kWh.
+    pub peak_nzd_kwh: f64,
+    /// Price in the off-peak band, NZD per kWh.
+    pub offpeak_nzd_kwh: f64,
+    /// Start of the off-peak band, local clock hour.
+    pub offpeak_start_h: f64,
+    /// End of the off-peak band, local clock hour. A value below the start wraps past midnight.
+    pub offpeak_end_h: f64,
+}
+
+impl Tariff {
+    /// Checks that the prices and window are usable.
+    pub fn validate(&self) -> Result<(), String> {
+        check(
+            "peak_nzd_kwh",
+            pos_or_zero(self.peak_nzd_kwh) && self.peak_nzd_kwh <= 10.0,
+        )?;
+        check(
+            "offpeak_nzd_kwh",
+            pos_or_zero(self.offpeak_nzd_kwh) && self.offpeak_nzd_kwh <= 10.0,
+        )?;
+        check("offpeak_start_h", in_range(self.offpeak_start_h, 0.0, 24.0))?;
+        check("offpeak_end_h", in_range(self.offpeak_end_h, 0.0, 24.0))?;
+        if (self.offpeak_end_h - self.offpeak_start_h).rem_euclid(24.0) == 0.0 {
+            return Err("tariff: off-peak window is empty".into());
+        }
+        Ok(())
+    }
+
+    /// Whether `ts_s` falls in the off-peak band at `utc_offset_h`.
+    pub fn is_offpeak(&self, ts_s: i64, utc_offset_h: f64) -> bool {
+        let hour = crate::time::local_hour(ts_s, utc_offset_h);
+        let since_start = (hour - self.offpeak_start_h).rem_euclid(24.0);
+        let width = (self.offpeak_end_h - self.offpeak_start_h).rem_euclid(24.0);
+        since_start < width
+    }
+}
 
 /// All parameters the Phase 1 model reads.
 #[derive(Debug, Clone, PartialEq)]
@@ -46,16 +88,10 @@ pub struct SimParams {
     pub cop_heating: f64,
     /// Dehumidifier moisture removal efficiency, kg of water removed per kWh of electricity.
     pub dehumidifier_mer_kg_kwh: f64,
-    /// Electricity price in the peak band, NZD/kWh. Placeholder: replace with the real tariff.
-    pub tariff_peak_nzd_kwh: f64,
-    /// Electricity price in the off-peak band, NZD/kWh. Placeholder: replace with the real tariff.
-    pub tariff_offpeak_nzd_kwh: f64,
-    /// Start of the off-peak band, local clock hour.
-    pub offpeak_start_h: f64,
-    /// End of the off-peak band, local clock hour. A value below the start wraps past midnight.
-    pub offpeak_end_h: f64,
     /// Largest time gap between accepted samples that is still integrated, seconds.
     pub max_gap_s: i64,
+    /// The site's electricity tariff. `None` until set; the simulation refuses to run without it.
+    pub tariff: Option<Tariff>,
 }
 
 impl Default for SimParams {
@@ -80,11 +116,8 @@ impl Default for SimParams {
             cop_cooling: 3.0,
             cop_heating: 3.0,
             dehumidifier_mer_kg_kwh: 1.2,
-            tariff_peak_nzd_kwh: 0.30,
-            tariff_offpeak_nzd_kwh: 0.15,
-            offpeak_start_h: 21.0,
-            offpeak_end_h: 7.0,
             max_gap_s: 900,
+            tariff: None,
         }
     }
 }
@@ -116,17 +149,10 @@ impl SimParams {
         check("cop_cooling", pos(self.cop_cooling))?;
         check("cop_heating", pos(self.cop_heating))?;
         check("dehumidifier_mer_kg_kwh", pos(self.dehumidifier_mer_kg_kwh))?;
-        check(
-            "tariff_peak_nzd_kwh",
-            in_range(self.tariff_peak_nzd_kwh, 0.0, 10.0),
-        )?;
-        check(
-            "tariff_offpeak_nzd_kwh",
-            in_range(self.tariff_offpeak_nzd_kwh, 0.0, 10.0),
-        )?;
-        check("offpeak_start_h", in_range(self.offpeak_start_h, 0.0, 24.0))?;
-        check("offpeak_end_h", in_range(self.offpeak_end_h, 0.0, 24.0))?;
         check("max_gap_s", self.max_gap_s > 0)?;
+        if let Some(t) = &self.tariff {
+            t.validate()?;
+        }
         Ok(())
     }
 
@@ -136,18 +162,14 @@ impl SimParams {
         let since_start = (hour - self.photoperiod_start_h).rem_euclid(24.0);
         since_start < self.photoperiod_h
     }
-
-    /// Whether `ts_s` falls in the off-peak tariff band.
-    pub fn is_offpeak(&self, ts_s: i64) -> bool {
-        let hour = crate::time::local_hour(ts_s, self.utc_offset_h);
-        let since_start = (hour - self.offpeak_start_h).rem_euclid(24.0);
-        let width = (self.offpeak_end_h - self.offpeak_start_h).rem_euclid(24.0);
-        since_start < width
-    }
 }
 
 fn pos(v: f64) -> bool {
     v.is_finite() && v > 0.0
+}
+
+fn pos_or_zero(v: f64) -> bool {
+    v.is_finite() && v >= 0.0
 }
 
 fn in_range(v: f64, lo: f64, hi: f64) -> bool {
@@ -167,9 +189,24 @@ mod tests {
     use super::*;
     use crate::time::parse_rfc3339_utc;
 
+    fn tariff() -> Tariff {
+        // Test fixture: a 21:00 to 07:00 off-peak window.
+        Tariff {
+            peak_nzd_kwh: 0.30,
+            offpeak_nzd_kwh: 0.15,
+            offpeak_start_h: 21.0,
+            offpeak_end_h: 7.0,
+        }
+    }
+
     #[test]
-    fn defaults_are_valid() {
-        assert_eq!(SimParams::default().validate(), Ok(()));
+    fn defaults_are_valid_but_have_no_tariff() {
+        let p = SimParams::default();
+        assert_eq!(p.validate(), Ok(()));
+        assert!(
+            p.tariff.is_none(),
+            "the tariff must come from the caller, not a default"
+        );
     }
 
     #[test]
@@ -187,6 +224,24 @@ mod tests {
     }
 
     #[test]
+    fn a_bad_tariff_is_refused() {
+        let p = SimParams {
+            tariff: Some(Tariff {
+                peak_nzd_kwh: -1.0,
+                ..tariff()
+            }),
+            ..SimParams::default()
+        };
+        assert!(p.validate().is_err());
+        let empty = Tariff {
+            offpeak_start_h: 7.0,
+            offpeak_end_h: 7.0,
+            ..tariff()
+        };
+        assert!(empty.validate().is_err());
+    }
+
+    #[test]
     fn lights_follow_the_local_photoperiod() {
         let p = SimParams::default(); // on 06:00-22:00 NZST (UTC+12)
         let at = |s: &str| parse_rfc3339_utc(s).unwrap();
@@ -198,11 +253,11 @@ mod tests {
 
     #[test]
     fn offpeak_band_wraps_midnight() {
-        let p = SimParams::default(); // 21:00-07:00 local
+        let t = tariff();
         let at = |s: &str| parse_rfc3339_utc(s).unwrap();
-        assert!(p.is_offpeak(at("2026-01-01T09:00:00Z"))); // 21:00 local
-        assert!(p.is_offpeak(at("2026-01-01T18:59:00Z"))); // 06:59 local
-        assert!(!p.is_offpeak(at("2026-01-01T19:00:00Z"))); // 07:00 local
-        assert!(!p.is_offpeak(at("2026-01-01T02:00:00Z"))); // 14:00 local
+        assert!(t.is_offpeak(at("2026-01-01T09:00:00Z"), 12.0)); // 21:00 local
+        assert!(t.is_offpeak(at("2026-01-01T18:59:00Z"), 12.0)); // 06:59 local
+        assert!(!t.is_offpeak(at("2026-01-01T19:00:00Z"), 12.0)); // 07:00 local
+        assert!(!t.is_offpeak(at("2026-01-01T02:00:00Z"), 12.0)); // 14:00 local
     }
 }

@@ -10,6 +10,7 @@
 
 use std::process::ExitCode;
 
+use tpt_agripod_sim::params::Tariff;
 use tpt_agripod_sim::{SimParams, mock, parse_csv, report, simulate};
 
 const USAGE: &str = "\
@@ -24,8 +25,10 @@ simulate options (defaults are assumptions, see docs/phase1-model.md):
   --cop-cooling X      sensible cooling COP (default 3.0)
   --cop-heating X      sensible heating COP (default 3.0)
   --mer X              dehumidifier kg removed per kWh (default 1.2)
-  --tariff-peak X      NZD/kWh, peak band (default 0.30, placeholder)
-  --tariff-offpeak X   NZD/kWh, off-peak band (default 0.15, placeholder)
+  --tariff-peak X      NZD per kWh, peak band (required)
+  --tariff-offpeak X   NZD per kWh, off-peak band (required)
+  --offpeak-start H    off-peak window start, local hour 0-24 (required)
+  --offpeak-end H      off-peak window end, local hour 0-24; below start wraps midnight (required)
   --utc-offset H       local time offset from UTC in hours (default 12)";
 
 fn main() -> ExitCode {
@@ -90,6 +93,12 @@ fn generate_mock(args: &[String]) -> Result<String, String> {
 fn simulate_cmd(args: &[String]) -> Result<String, String> {
     let mut p = SimParams::default();
     let mut input: Option<String> = None;
+    let (mut peak, mut offpeak, mut start, mut end): (
+        Option<f64>,
+        Option<f64>,
+        Option<f64>,
+        Option<f64>,
+    ) = (None, None, None, None);
     let mut format = "human".to_string();
     let mut it = args.iter();
     while let Some(flag) = it.next() {
@@ -101,12 +110,21 @@ fn simulate_cmd(args: &[String]) -> Result<String, String> {
             "--cop-cooling" => p.cop_cooling = parse_value(flag, it.next())?,
             "--cop-heating" => p.cop_heating = parse_value(flag, it.next())?,
             "--mer" => p.dehumidifier_mer_kg_kwh = parse_value(flag, it.next())?,
-            "--tariff-peak" => p.tariff_peak_nzd_kwh = parse_value(flag, it.next())?,
-            "--tariff-offpeak" => p.tariff_offpeak_nzd_kwh = parse_value(flag, it.next())?,
+            "--tariff-peak" => peak = Some(parse_value(flag, it.next())?),
+            "--tariff-offpeak" => offpeak = Some(parse_value(flag, it.next())?),
+            "--offpeak-start" => start = Some(parse_value(flag, it.next())?),
+            "--offpeak-end" => end = Some(parse_value(flag, it.next())?),
             "--utc-offset" => p.utc_offset_h = parse_value(flag, it.next())?,
             other => return Err(format!("unknown option '{other}' for simulate")),
         }
     }
+    p.tariff = Some(Tariff {
+        peak_nzd_kwh: peak
+            .ok_or("simulate needs --tariff-peak (no default: the tariff is a site fact)")?,
+        offpeak_nzd_kwh: offpeak.ok_or("simulate needs --tariff-offpeak")?,
+        offpeak_start_h: start.ok_or("simulate needs --offpeak-start")?,
+        offpeak_end_h: end.ok_or("simulate needs --offpeak-end")?,
+    });
     let path = input.ok_or("simulate needs --input FILE")?;
     if format != "human" && format != "json" {
         return Err(format!(

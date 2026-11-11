@@ -69,11 +69,14 @@ pub fn human(s: &Summary, p: &SimParams, rejected: &[Rejection]) -> String {
     let _ = writeln!(o, "  Dehumidification:    {:.2}", s.dehumidification_kwh);
     let _ = writeln!(o, "  Total HVAC:          {:.2}", s.hvac_kwh);
     let _ = writeln!(o);
-    let _ = writeln!(
-        o,
-        "HVAC cost (NZD; placeholder tariff {:.2} peak / {:.2} off-peak per kWh)",
-        p.tariff_peak_nzd_kwh, p.tariff_offpeak_nzd_kwh
-    );
+    let tariff_text = match &p.tariff {
+        Some(t) => format!(
+            "peak {:.2}, off-peak {:.2} per kWh",
+            t.peak_nzd_kwh, t.offpeak_nzd_kwh
+        ),
+        None => "not set".to_string(),
+    };
+    let _ = writeln!(o, "HVAC cost (NZD; tariff {tariff_text})");
     let _ = writeln!(
         o,
         "  Off-peak:            {:.2} kWh, ${:.2}",
@@ -146,8 +149,18 @@ pub fn json(s: &Summary, p: &SimParams, rejected: &[Rejection]) -> String {
         ("cop_cooling", num(p.cop_cooling)),
         ("cop_heating", num(p.cop_heating)),
         ("dehumidifier_mer_kg_kwh", num(p.dehumidifier_mer_kg_kwh)),
-        ("tariff_peak_nzd_kwh", num(p.tariff_peak_nzd_kwh)),
-        ("tariff_offpeak_nzd_kwh", num(p.tariff_offpeak_nzd_kwh)),
+        (
+            "tariff_peak_nzd_kwh",
+            p.tariff
+                .as_ref()
+                .map_or("null".to_string(), |t| num(t.peak_nzd_kwh)),
+        ),
+        (
+            "tariff_offpeak_nzd_kwh",
+            p.tariff
+                .as_ref()
+                .map_or("null".to_string(), |t| num(t.offpeak_nzd_kwh)),
+        ),
         ("utc_offset_h", num(p.utc_offset_h)),
     ];
     let params_json = object(&params);
