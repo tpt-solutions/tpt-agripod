@@ -1,0 +1,10 @@
+{
+  "_comment": "PLACEHOLDER stage durations for a 120-day cycle. Not agronomic advice. Replace per crop profile once profiles carry stage lists.",
+  "stages": [
+    { "name": "germination", "days": 7 },
+    { "name": "seedling", "days": 14 },
+    { "name": "vegetative", "days": 35 },
+    { "name": "bulking", "days": 40 },
+    { "name": "maturity", "days": 24 }
+  ]
+}
