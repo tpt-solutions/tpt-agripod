@@ -135,7 +135,7 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 ### Edge (Rust)
 - [ ] MQTT client (permissive licence), TLS and auth. MQTT done: `minimq` over tokio (ADR 0006, 0013), tested against a real broker (`tests/node_link.rs`). TLS and auth not started (needs a `no_std` TLS crate audited against the policy)
 - [ ] Apply a Crop Profile at runtime: targets feed controllers and contracts (no recompile). Partial: the pump duty setpoint is applied to irrigation and checked by the contract. The LED dimming value is stored, but no LED loop uses it, and the targets do not feed anything yet
-- [ ] Offline operation: continue on the last profile; buffer telemetry to disk; resync on reconnect. Partial: the loop runs without the fleet link (it never needs one). No telemetry buffer yet. The reconnect path is written but not tested under a real outage
+- [ ] Offline operation: continue on the last profile; buffer telemetry to disk; resync on reconnect. Done: the control loop runs regardless of the link, telemetry is held in a durable outbox that survives restarts and is drained in order on reconnect, and the sequence resumes without reuse (ADR 0015). The end-to-end outage drill passes against real broker processes (tests/outage_drill.rs). Power-loss and hardware-side drills need the hardware
 - [x] Profile validation on the edge (reject unsafe or malformed profiles). Own strict JSON parser (ADR 0011). Mirrors the schema's rules, including unknown-field rejection, and reads the pump limit from the shipped contract. A refused profile keeps the previous one active
 
 ### Physics integration

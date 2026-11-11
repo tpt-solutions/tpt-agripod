@@ -22,6 +22,7 @@ Status values: `Proposed`, `Accepted`, `Superseded by NNNN`.
 | [0012](0012-raw-retention-90-days.md) | Raw sensor retention is 90 days | Accepted |
 | [0013](0013-edge-mqtt-over-tokio.md) | Edge MQTT runs minimq over tokio, with embassy-time's generic timer queue | Accepted |
 | [0014](0014-site-config-no-defaults.md) | Site-specific values come from a site file, with no defaults | Accepted |
+| [0015](0015-offline-operation-outbox.md) | The control loop runs regardless of the link; telemetry waits in a durable outbox | Accepted |
 
 ## Template
 

@@ -22,6 +22,7 @@ the maintainer deciding what Phase 3 gates on.
   push gets the same ack back and is not applied twice. Unsafe profiles are rejected with reasons,
   and the previous profile stays active.
 - **Commands** are acked as rejected, because command execution is not implemented.
+- **Offline operation** (ADR 0015): the control loop runs on its own schedule, whether or not the  broker is reachable. Telemetry is held in a durable outbox and drained in order on reconnect. An  outage drill (`tests/outage_drill.rs`) kills and restarts the broker process and checks that the  outage telemetry is delivered with no gap.
 - **Tested against a real broker** (`tests/node_link.rs`, five cases): profile applied and acked,
   repeat push answered identically, unsafe profile rejected with reasons, telemetry each cycle with
   increasing `seq`, safe state on sensor loss, and last-will after the task is aborted. The broker
@@ -72,7 +73,7 @@ the maintainer deciding what Phase 3 gates on.
 | Item | Status | Blocker |
 |---|---|---|
 | Edge TLS and auth | Not started | Needs a `no_std` TLS crate audited against the policy |
-| Telemetry buffer on the edge (offline resync) | Not started | Buffer design (the broker and the node are connected in the tests, not under outage) |
+| Hardware-side outage behaviour (power loss, sensor loss, actuator loss) | Not tested | The broker outage drill passes (`tests/outage_drill.rs`, ADR 0015). Power-loss and hardware drills need the hardware |
 | The `agripod-edged` daemon | Not built | Needs the sensor and actuator drivers (device register maps from datasheets). Without them a daemon would only ever report safe state |
 | LED dimming loop | Not started | No LED actuator exists to drive |
 | Profile targets feeding controllers | Not started | No controller consumes VPD or DLI targets yet |
