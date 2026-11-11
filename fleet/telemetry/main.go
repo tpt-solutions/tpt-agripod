@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 // Command tpt-agripod-telemetry ingests sensor points as JSON Lines and writes them through
-// the batcher to a sink (ADR 0005). Today it reads stdin and writes a file. The MQTT source and
-// the Keystone sink are wired in once the MQTT client is added (ADR 0006, 0007) and the Keystone
-// SDK adapter is in place (ADR 0009).
+// the batcher to a sink (ADR 0005). With -in it reads a file or stdin. With -broker it subscribes
+// to telemetry over MQTT (ADR 0007) until interrupted. The Keystone sink is not selectable from
+// the command yet: the SDK adapter is not in place (ADR 0009).
 package main
 
 import (
@@ -14,6 +14,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"tpt-agripod-telemetry/telemetry"
 )
@@ -23,9 +26,17 @@ const version = "0.1.0"
 func main() {
 	in := flag.String("in", "-", "JSON Lines input, or - for stdin")
 	out := flag.String("out", "points.jsonl", "file sink path (appended, fsynced per batch)")
+	broker := flag.String("broker", "", "MQTT broker host:port; if set, ingest telemetry from MQTT instead of -in")
 	flag.Parse()
 	fmt.Fprintf(os.Stderr, "tpt-agripod-telemetry %s\n", version)
 
+	if *broker != "" {
+		if err := runMQTT(*broker, *out); err != nil {
+			fmt.Fprintf(os.Stderr, "tpt-agripod-telemetry: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(*in, *out); err != nil {
 		fmt.Fprintf(os.Stderr, "tpt-agripod-telemetry: %v\n", err)
 		os.Exit(1)
@@ -91,4 +102,49 @@ func openInput(path string) (io.Reader, func(), error) {
 		return nil, nil, err
 	}
 	return f, func() { _ = f.Close() }, nil
+}
+
+// runMQTT ingests telemetry from the broker until SIGINT or SIGTERM. Shutdown closes the MQTT
+// session first, so no new messages arrive, then flushes the batcher.
+func runMQTT(broker, outPath string) error {
+	sink, err := telemetry.OpenFileSink(outPath)
+	if err != nil {
+		return err
+	}
+	defer sink.Close()
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	b, err := telemetry.NewBatcher(ctx, sink, telemetry.DefaultConfig())
+	if err != nil {
+		return err
+	}
+	ing, err := telemetry.NewIngester(ctx, b, 100_000)
+	if err != nil {
+		return err
+	}
+	src, err := telemetry.StartSource(telemetry.SourceConfig{
+		Address:   broker,
+		ClientID:  fmt.Sprintf("telemetry-%d", os.Getpid()),
+		KeepAlive: 30,
+		OnError:   func(err error) { fmt.Fprintf(os.Stderr, "mqtt: %v\n", err) },
+	}, ing)
+	if err != nil {
+		_ = b.Close(context.Background())
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "ingesting telemetry from %s; interrupt to stop\n", broker)
+	<-ctx.Done()
+
+	_ = src.Close()
+	closeCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := b.Close(closeCtx); err != nil {
+		return err
+	}
+	st := ing.Stats()
+	fmt.Fprintf(os.Stderr, "messages %d, accepted %d, duplicates %d, rejected %d, points %d, seq gaps %d\n",
+		st.Messages, st.Accepted, st.Duplicates, st.Rejected, st.Points, st.SeqGaps)
+	return nil
 }
