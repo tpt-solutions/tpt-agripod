@@ -78,11 +78,40 @@ jobs:
       - name: Install go-licenses
         run: go install github.com/google/go-licenses@v1.6.0
       # Fails on any licence outside the allow-list in todo.md. Apache-only is denied.
-      # Go modules are not yet pinned, so this step is a no-op until dependencies exist.
+      # github.com/tpt/sdk-go is the vendored Keystone SDK. It is MIT OR Apache-2.0 (dual), which
+      # the policy allows, but go-licenses reads it as Apache-2.0 alone and cannot express the dual
+      # expression. It is reviewed in docs/dependency-pins.md, so it is excluded here by name.
       - name: Check Go dependency licences
         run: |
           for m in fleet/orchestrator fleet/telemetry; do
             (cd "$m" && go-licenses check ./... \
               --allowed_licenses=MIT,BSD-2-Clause,BSD-3-Clause,ISC,Zlib,Unlicense \
-              --ignore tpt-agripod-orchestrator --ignore tpt-agripod-telemetry)
+              --ignore tpt-agripod-orchestrator --ignore tpt-agripod-telemetry \
+              --ignore github.com/tpt/sdk-go)
           done
+
+  edge-broker:
+    name: edge MQTT against the test broker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: edge
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - name: Start the test broker
+        run: |
+          (cd fleet/testbroker && go build -o "$RUNNER_TEMP/testbroker" .)
+          "$RUNNER_TEMP/testbroker" -addr 127.0.0.1:1883 &
+          for i in $(seq 1 30); do
+            (echo > /dev/tcp/127.0.0.1/1883) 2>/dev/null && break
+            sleep 1
+          done
+      - name: Node MQTT tests
+        working-directory: edge
+        env:
+          AGRIPOD_TEST_BROKER: 127.0.0.1:1883
+        run: cargo test -p tpt-agripod-edge --test node_link
