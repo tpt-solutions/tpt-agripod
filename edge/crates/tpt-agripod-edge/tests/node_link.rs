@@ -106,7 +106,11 @@ fn new_node(addr: &str, node: &str, healthy: Arc<Mutex<bool>>) -> NodeT {
     cfg.cycle = Duration::from_millis(100);
     cfg.heartbeat = Duration::from_secs(30);
     let control = ControlLoop::new(&common::test_site(), Hw, Log).unwrap();
-    Node::new(cfg, control, Sensors { healthy }).unwrap()
+    let path = std::env::temp_dir().join(format!("agripod-it-{node}-{}", uuid_v4().unwrap()));
+    std::fs::create_dir_all(&path).unwrap();
+    let outbox =
+        tpt_agripod_edge::outbox::Outbox::open(&path.join("outbox.log"), 1_000_000).unwrap();
+    Node::new(cfg, control, Sensors { healthy }, outbox).unwrap()
 }
 
 /// A running node and the handle to stop it.
@@ -115,13 +119,14 @@ struct Running {
     stop: Option<oneshot::Sender<()>>,
 }
 
-fn spawn_node(mut node: NodeT) -> Running {
+fn spawn_node(node: NodeT) -> Running {
     let (tx, rx) = oneshot::channel::<()>();
     let handle = tokio::spawn(async move {
-        tpt_agripod_edge::node::run(&mut node, async {
+        tpt_agripod_edge::node::run(node, async {
             let _ = rx.await;
         })
         .await
+        .map(|_| ())
     });
     Running {
         handle,

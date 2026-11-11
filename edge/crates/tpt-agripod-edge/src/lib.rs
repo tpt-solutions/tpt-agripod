@@ -15,6 +15,7 @@ pub mod estimate;
 pub mod json;
 pub mod link;
 pub mod node;
+pub mod outbox;
 pub mod profile;
 pub mod site;
 

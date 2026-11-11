@@ -10,20 +10,25 @@
 //! failure. The control loop never waits on the network, so a broken link cannot change what the
 //! hardware does. The last-will marks the node offline if the process disappears.
 
+use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::Pin;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use embedded_io_adapters::tokio_1::FromTokio;
-use minimq::{Buffers, ConfigBuilder, Publication, QoS, Session, TopicFilter, Will};
+use minimq::{
+    Buffers, ConfigBuilder, Connection, PubError, Publication, QoS, Session, TopicFilter, Will,
+};
 use tokio::net::TcpStream;
-use tokio::time::{MissedTickBehavior, interval, sleep};
+use tokio::sync::Mutex;
+use tokio::time::{MissedTickBehavior, interval, sleep, timeout};
 
 use crate::cycle::{Actuators, ControlLoop, Inputs, Journal, Outcome};
 use crate::link::{
     AckCache, Envelope, TelemetrySample, Topics, command_ack_rejected, command_msg_id, handle_push,
     status_message, telemetry_message,
 };
+use crate::outbox::{Outbox, Record};
 use crate::profile::ProfileStore;
 
 /// Where the node gets its readings. Hardware implements it; tests use fakes.
@@ -98,11 +103,18 @@ pub struct Node<S: SensorSource, A: Actuators, J: Journal> {
     seq: u64,
     started_s: u64,
     last_state: &'static str,
+    outbox: Outbox,
+    live: VecDeque<Outbound>,
 }
 
 impl<S: SensorSource, A: Actuators, J: Journal> Node<S, A, J> {
     /// A node with the given control loop and sensors. No profile is active until one is pushed.
-    pub fn new(cfg: NodeConfig, control: ControlLoop<A, J>, source: S) -> Result<Self, String> {
+    pub fn new(
+        cfg: NodeConfig,
+        control: ControlLoop<A, J>,
+        source: S,
+        outbox: Outbox,
+    ) -> Result<Self, String> {
         let topics = Topics::new(&cfg.site, &cfg.node)?;
         Ok(Self {
             cfg,
@@ -111,9 +123,11 @@ impl<S: SensorSource, A: Actuators, J: Journal> Node<S, A, J> {
             source,
             store: ProfileStore::new(),
             acks: AckCache::new(256),
-            seq: 0,
+            seq: outbox.high_water(),
             started_s: now_s(),
             last_state: "online",
+            outbox,
+            live: VecDeque::new(),
         })
     }
 
@@ -184,9 +198,24 @@ impl<S: SensorSource, A: Actuators, J: Journal> Node<S, A, J> {
         })
     }
 
+    /// The telemetry outbox, read-only.
+    pub fn outbox(&self) -> &Outbox {
+        &self.outbox
+    }
+
+    /// Up to `max` undelivered telemetry messages, oldest first.
+    pub fn pending_telemetry(&self, max: usize) -> Vec<Record> {
+        self.outbox.pending().iter().take(max).cloned().collect()
+    }
+
+    /// Marks a telemetry message as delivered, removing it from the durable outbox.
+    pub fn acknowledge(&mut self, seq: u64) -> Result<(), String> {
+        self.outbox.ack(seq).map_err(|e| format!("outbox: {e}"))
+    }
+
     /// Runs one control cycle and returns what to publish: good readings as telemetry, and a
     /// status change if the cycle went to safe state.
-    pub fn tick(&mut self, now: u64) -> Result<Vec<Outbound>, String> {
+    pub fn tick(&mut self, now: u64) -> Result<(), String> {
         let inputs = self.source.read(now);
         let outcome = self.control.step(&inputs);
         self.last_state = match outcome {
@@ -223,16 +252,30 @@ impl<S: SensorSource, A: Actuators, J: Journal> Node<S, A, J> {
         if !samples.is_empty() {
             self.seq += 1;
             let env = self.envelope(now)?;
-            out.push(Outbound {
-                topic: self.topics.telemetry.clone(),
-                payload: telemetry_message(&env, self.seq, &samples),
-                retain: false,
-            });
+            let payload = telemetry_message(&env, self.seq, &samples);
+            // Durable before it is sent: the outbox keeps it until the broker has taken it.
+            self.outbox
+                .push(self.seq, &payload)
+                .map_err(|e| format!("outbox: {e}"))?;
         }
         if self.last_state == "safe_state" {
             out.push(self.heartbeat(now)?);
         }
-        Ok(out)
+        self.live.extend(out);
+        Ok(())
+    }
+
+    /// Handles one inbound message and queues the replies for the link to send.
+    pub fn handle_inbound(&mut self, topic: &str, payload: &str, now: u64) -> Result<(), String> {
+        let replies = self.on_message(topic, payload, now);
+        self.live.extend(replies);
+        Ok(())
+    }
+
+    /// Takes the queued live messages (status, acks) for the link to send. Live messages are not
+    /// durable: they describe the present, so a message lost while disconnected is not replayed.
+    pub fn take_live(&mut self) -> Vec<Outbound> {
+        self.live.drain(..).collect()
     }
 
     /// Handles one inbound message. Pushes are validated, applied or rejected, and acked. Commands
@@ -295,38 +338,86 @@ pub fn now_s() -> u64 {
 enum Ended {
     /// Shutdown was requested. The caller stops.
     Shutdown,
-    /// The broker dropped the connection. The caller reconnects.
+    /// The connection dropped. The link reconnects.
     Disconnected,
 }
 
-/// Runs the node against the broker until `shutdown` completes. Reconnects after failures.
-pub async fn run<S, A, J, F>(node: &mut Node<S, A, J>, shutdown: F) -> Result<(), String>
+/// How often the link flushes queued messages and checks for new ones.
+const FLUSH_EVERY: Duration = Duration::from_secs(1);
+/// Telemetry sent per flush. Enough to catch up after an outage without starving other work.
+const DRAIN_BATCH: usize = 200;
+/// Longest a TCP connect may take before the link gives up and retries.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// Longest one wait for session progress while the send window is full.
+const PROGRESS_WAIT: Duration = Duration::from_millis(100);
+/// How many times a publish is retried while the send window stays full. At 100 ms each, 600
+/// attempts is one minute: a broker that never acknowledges is an error, not a stall.
+const SEND_ATTEMPTS: u32 = 600;
+
+/// Runs the node until `shutdown` completes, and returns it.
+///
+/// Two tasks run for the life of the node, and neither waits on the other:
+///
+/// - The control task runs a cycle on schedule whether or not the broker is reachable. The
+///   hardware never waits on the network, and telemetry is kept in the durable outbox.
+/// - The link task keeps a connection to the broker, reconnecting after failures. When connected,
+///   it sends live messages and the outbox, and it handles pushes and commands.
+pub async fn run<S, A, J, F>(node: Node<S, A, J>, shutdown: F) -> Result<Node<S, A, J>, String>
 where
     S: SensorSource,
     A: Actuators,
     J: Journal,
     F: Future<Output = ()>,
 {
+    let node = Mutex::new(node);
+    let cycle = node.lock().await.cfg.cycle;
     let mut shutdown = std::pin::pin!(shutdown);
-    let mut rx = vec![0u8; 4096];
-    let mut tx = vec![0u8; 8192];
+    tokio::select! {
+        r = control_task(&node, cycle) => { r?; }
+        r = link_task(&node, shutdown.as_mut()) => { r?; }
+    }
+    Ok(node.into_inner())
+}
+
+async fn control_task<S, A, J>(node: &Mutex<Node<S, A, J>>, cycle: Duration) -> Result<(), String>
+where
+    S: SensorSource,
+    A: Actuators,
+    J: Journal,
+{
+    let mut tick = interval(cycle);
+    tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
     loop {
-        match session(node, &mut rx, &mut tx, shutdown.as_mut()).await {
+        tick.tick().await;
+        node.lock().await.tick(now_s())?;
+    }
+}
+
+async fn link_task<S, A, J>(
+    node: &Mutex<Node<S, A, J>>,
+    mut shutdown: Pin<&mut impl Future<Output = ()>>,
+) -> Result<(), String>
+where
+    S: SensorSource,
+    A: Actuators,
+    J: Journal,
+{
+    loop {
+        let retry = node.lock().await.cfg.retry;
+        match session(node, shutdown.as_mut()).await {
             Ok(Ended::Shutdown) => return Ok(()),
             Ok(Ended::Disconnected) => eprintln!("mqtt: disconnected; reconnecting"),
             Err(e) => eprintln!("mqtt: {e}; retrying"),
         }
         tokio::select! {
             _ = shutdown.as_mut() => return Ok(()),
-            _ = sleep(node.cfg.retry) => {}
+            _ = sleep(retry) => {}
         }
     }
 }
 
 async fn session<S, A, J>(
-    node: &mut Node<S, A, J>,
-    rx: &mut [u8],
-    tx: &mut [u8],
+    node: &Mutex<Node<S, A, J>>,
     mut shutdown: Pin<&mut impl Future<Output = ()>>,
 ) -> Result<Ended, String>
 where
@@ -335,22 +426,41 @@ where
     J: Journal,
 {
     // Copy what the session borrows, so the session does not hold a borrow of the node.
-    let client_id = node.cfg.node.clone();
-    let keepalive = node.cfg.keepalive_s;
-    let status_topic = node.topics.status.clone();
-    let push_topic = node.topics.profile_push.clone();
-    let command_topic = node.topics.command.clone();
-    let will_out = node.will()?;
-    let online = node.heartbeat(now_s())?;
+    let (
+        client_id,
+        keepalive,
+        broker,
+        heartbeat_every,
+        status_topic,
+        push_topic,
+        command_topic,
+        will_out,
+        online,
+    ) = {
+        let n = node.lock().await;
+        (
+            n.cfg.node.clone(),
+            n.cfg.keepalive_s,
+            n.cfg.broker.clone(),
+            n.cfg.heartbeat,
+            n.topics.status.clone(),
+            n.topics.profile_push.clone(),
+            n.topics.command.clone(),
+            n.will()?,
+            n.heartbeat(now_s())?,
+        )
+    };
 
-    let tcp = TcpStream::connect(&node.cfg.broker)
+    let tcp = timeout(CONNECT_TIMEOUT, TcpStream::connect(&broker))
         .await
-        .map_err(|e| format!("connect {}: {e}", node.cfg.broker))?;
+        .map_err(|_| format!("connect {broker}: timed out"))?
+        .map_err(|e| format!("connect {broker}: {e}"))?;
+    let (mut rx, mut tx) = (vec![0u8; 4096], vec![0u8; 8192]);
     let will = Will::new(&status_topic, will_out.payload.as_bytes(), &[])
         .map_err(|e| format!("will: {e:?}"))?
         .retained()
         .qos(QoS::AtLeastOnce);
-    let config = ConfigBuilder::new(Buffers::new(rx, tx))
+    let config = ConfigBuilder::new(Buffers::new(&mut rx, &mut tx))
         .client_id(&client_id)
         .map_err(|e| format!("client id: {e:?}"))?
         .keepalive_interval(keepalive)
@@ -371,11 +481,12 @@ where
     )
     .await
     .map_err(|e| format!("subscribe: {e:?}"))?;
-    publish_all(&mut conn, vec![online]).await?;
+    publish_all(node, &mut conn, vec![online]).await?;
+    flush(node, &mut conn).await?;
 
-    let mut cycle = interval(node.cfg.cycle);
-    cycle.set_missed_tick_behavior(MissedTickBehavior::Skip);
-    let mut beat = interval(node.cfg.heartbeat);
+    let mut flush_tick = interval(FLUSH_EVERY);
+    flush_tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    let mut beat = interval(heartbeat_every);
     beat.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
     loop {
@@ -393,41 +504,285 @@ where
             } => {
                 match received? {
                     Some((topic, payload)) => {
-                        let out = node.on_message(&topic, &payload, now_s());
-                        publish_all(&mut conn, out).await?;
+                        node.lock().await.handle_inbound(&topic, &payload, now_s())?;
                     }
                     None => return Ok(Ended::Disconnected),
                 }
             }
-            _ = cycle.tick() => {
-                let out = node.tick(now_s())?;
-                publish_all(&mut conn, out).await?;
+            _ = flush_tick.tick() => {
+                flush(node, &mut conn).await?;
             }
             _ = beat.tick() => {
-                let out = vec![node.heartbeat(now_s())?];
-                publish_all(&mut conn, out).await?;
+                let hb = node.lock().await.heartbeat(now_s())?;
+                publish_all(node, &mut conn, vec![hb]).await?;
             }
         }
     }
 }
 
-async fn publish_all<IO>(
-    conn: &mut minimq::Connection<'_, '_, IO>,
+/// Sends queued live messages, then the outbox in order. Each outbox message is acknowledged only
+/// after its publish call has succeeded, so a failure leaves it for the next connection.
+async fn flush<S, A, J, IO>(
+    node: &Mutex<Node<S, A, J>>,
+    conn: &mut Connection<'_, '_, IO>,
+) -> Result<(), String>
+where
+    S: SensorSource,
+    A: Actuators,
+    J: Journal,
+    IO: minimq::Io,
+{
+    let live = node.lock().await.take_live();
+    publish_all(node, conn, live).await?;
+    let (topic, batch) = {
+        let n = node.lock().await;
+        (n.topics.telemetry.clone(), n.pending_telemetry(DRAIN_BATCH))
+    };
+    for Record { seq, payload } in batch {
+        send(node, conn, &topic, &payload, false).await?;
+        node.lock().await.acknowledge(seq)?;
+    }
+    Ok(())
+}
+
+/// Publishes every message in order at QoS 1.
+async fn publish_all<S, A, J, IO>(
+    node: &Mutex<Node<S, A, J>>,
+    conn: &mut Connection<'_, '_, IO>,
     messages: Vec<Outbound>,
 ) -> Result<(), String>
 where
+    S: SensorSource,
+    A: Actuators,
+    J: Journal,
     IO: minimq::Io,
 {
     for m in messages {
-        let publication = Publication::text(&m.topic, &m.payload).qos(QoS::AtLeastOnce);
-        let publication = if m.retain {
+        send(node, conn, &m.topic, &m.payload, m.retain).await?;
+    }
+    Ok(())
+}
+
+/// Publishes one message at QoS 1. When the session's send window is full, publish refuses with
+/// `NotReady`. The session then has to make progress, which processes acknowledgements, so this
+/// polls the session and tries again. Any inbound message seen meanwhile goes to the node.
+async fn send<S, A, J, IO>(
+    node: &Mutex<Node<S, A, J>>,
+    conn: &mut Connection<'_, '_, IO>,
+    topic: &str,
+    payload: &str,
+    retain: bool,
+) -> Result<(), String>
+where
+    S: SensorSource,
+    A: Actuators,
+    J: Journal,
+    IO: minimq::Io,
+{
+    for _ in 0..SEND_ATTEMPTS {
+        let publication = Publication::text(topic, payload).qos(QoS::AtLeastOnce);
+        let publication = if retain {
             publication.retain()
         } else {
             publication
         };
-        conn.publish(publication)
-            .await
-            .map_err(|e| format!("publish {}: {e:?}", m.topic))?;
+        match conn.publish(publication).await {
+            Ok(_) => return Ok(()),
+            Err(PubError::Session(
+                minimq::Error::NotReady
+                | minimq::Error::Resource(minimq::ResourceError::InflightExhausted),
+            )) => {
+                if let Some((t, p)) = progress(conn).await? {
+                    node.lock().await.handle_inbound(&t, &p, now_s())?;
+                }
+            }
+            Err(e) => return Err(format!("publish {topic}: {e:?}")),
+        }
     }
-    Ok(())
+    Err(format!(
+        "publish {topic}: send window stayed full for a minute; the broker is not acknowledging"
+    ))
+}
+
+/// Lets the session make progress. Returns an inbound publish if that progress produced one.
+async fn progress<IO>(conn: &mut Connection<'_, '_, IO>) -> Result<Option<(String, String)>, String>
+where
+    IO: minimq::Io,
+{
+    // Bounded: a session with no progress must still yield, so timers and the control loop run.
+    let waited = timeout(PROGRESS_WAIT, conn.poll()).await;
+    let Ok(result) = waited else {
+        return Ok(None);
+    };
+    match result {
+        Ok(Some(m)) => Ok(Some((
+            m.topic().to_string(),
+            String::from_utf8_lossy(m.payload()).into_owned(),
+        ))),
+        Ok(None) => Ok(None),
+        Err(minimq::Error::Disconnected) => {
+            Err("session disconnected while waiting for acknowledgements".into())
+        }
+        Err(e) => Err(format!("session progress: {e:?}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cycle::{Actuators, Command, ControlLoop, Event, Journal};
+    use crate::estimate::Sample;
+    use crate::json::Value;
+
+    struct Fixed;
+
+    impl SensorSource for Fixed {
+        fn read(&mut self, now_s: u64) -> Inputs {
+            Inputs {
+                now_s,
+                moisture: Some(Sample {
+                    value: 0.6,
+                    at_s: now_s,
+                }),
+                reservoir_l: Some(Sample {
+                    value: 80.0,
+                    at_s: now_s,
+                }),
+                headroom_w: Some(Sample {
+                    value: 2500.0,
+                    at_s: now_s,
+                }),
+            }
+        }
+    }
+
+    struct Hw;
+
+    impl Actuators for Hw {
+        fn apply(&mut self, _c: &Command) -> Result<(), String> {
+            Ok(())
+        }
+
+        fn isolate(&mut self) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    struct Quiet;
+
+    impl Journal for Quiet {
+        fn record(&mut self, _e: Event) {}
+    }
+
+    fn site() -> crate::site::SiteConfig {
+        crate::site::SiteConfig::parse(include_str!("../tests/fixtures/site.test.json")).unwrap()
+    }
+
+    fn outbox_path(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("agripod-node-{name}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("outbox.log");
+        let _ = std::fs::remove_file(&path);
+        path
+    }
+
+    fn node(path: &std::path::Path) -> Node<Fixed, Hw, Quiet> {
+        let cfg = NodeConfig::new("wgtn-bay-01", "nuc-01", "127.0.0.1:1").unwrap();
+        let control = ControlLoop::new(&site(), Hw, Quiet).unwrap();
+        Node::new(cfg, control, Fixed, Outbox::open(path, 1_000_000).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn telemetry_waits_in_the_outbox_and_survives_a_restart_until_acknowledged() {
+        let path = outbox_path("durable");
+        {
+            // No broker is involved: this is the state of a node that cannot reach one.
+            let mut n = node(&path);
+            for t in 0..3 {
+                n.tick(1_767_225_600 + t * 10).unwrap();
+            }
+            let seqs: Vec<u64> = n.pending_telemetry(10).iter().map(|r| r.seq).collect();
+            assert_eq!(seqs, vec![1, 2, 3]);
+            n.acknowledge(2).unwrap();
+        }
+        // Restart: the unacknowledged messages are still there, in order.
+        let mut n = node(&path);
+        let pending = n.pending_telemetry(10);
+        assert_eq!(
+            pending.iter().map(|r| r.seq).collect::<Vec<_>>(),
+            vec![1, 3]
+        );
+        let v = crate::json::parse(&pending[0].payload).unwrap();
+        assert_eq!(v.get("node_id").and_then(Value::as_str), Some("nuc-01"));
+        assert_eq!(
+            v.get("samples").and_then(Value::as_array).map(|s| s.len()),
+            Some(3)
+        );
+        // The sequence continues after a restart: the outbox does not reset it, so no false gap is
+        // created by a fresh process.
+        n.tick(1_767_225_700).unwrap();
+        assert_eq!(n.pending_telemetry(10).last().map(|r| r.seq), Some(4));
+    }
+
+    #[test]
+    fn a_full_outbox_drops_the_oldest_and_the_gap_is_visible_in_seq() {
+        let path = outbox_path("full");
+        let cfg = NodeConfig::new("wgtn-bay-01", "nuc-01", "127.0.0.1:1").unwrap();
+        let control = ControlLoop::new(&site(), Hw, Quiet).unwrap();
+        // Room for about two telemetry messages (each is a few hundred bytes).
+        let one = {
+            let mut n = node(&path);
+            n.tick(1_767_225_600).unwrap();
+            n.pending_telemetry(1)[0].payload.len() as u64
+        };
+        let _ = std::fs::remove_file(&path);
+        let mut n = Node::new(
+            cfg,
+            control,
+            Fixed,
+            Outbox::open(&path, one * 2 + 8).unwrap(),
+        )
+        .unwrap();
+        for t in 0..5 {
+            n.tick(1_767_225_600 + t * 10).unwrap();
+        }
+        let seqs: Vec<u64> = n.pending_telemetry(10).iter().map(|r| r.seq).collect();
+        assert_eq!(seqs, vec![4, 5]);
+        assert_eq!(n.outbox().dropped(), 3);
+    }
+
+    #[tokio::test]
+    async fn measurement_continues_while_the_broker_is_unreachable() {
+        // Nothing listens on port 1, so every connect fails. The control loop must not care.
+        let path = outbox_path("offline");
+        let mut cfg = NodeConfig::new("wgtn-bay-01", "nuc-01", "127.0.0.1:1").unwrap();
+        cfg.cycle = Duration::from_millis(50);
+        cfg.retry = Duration::from_millis(50);
+        let control = ControlLoop::new(&site(), Hw, Quiet).unwrap();
+        let outbox = Outbox::open(&path, 1_000_000).unwrap();
+        let n = Node::new(cfg, control, Fixed, outbox).unwrap();
+
+        let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
+        let handle = tokio::spawn(run(n, async {
+            let _ = stopped.await;
+        }));
+        tokio::time::sleep(Duration::from_millis(600)).await;
+        let _ = stop.send(());
+        let node = handle.await.unwrap().expect("the node stops cleanly");
+
+        let seqs: Vec<u64> = node
+            .pending_telemetry(10_000)
+            .iter()
+            .map(|r| r.seq)
+            .collect();
+        assert!(
+            seqs.len() >= 4,
+            "only {} telemetry messages while offline",
+            seqs.len()
+        );
+        assert!(
+            seqs.windows(2).all(|w| w[1] == w[0] + 1),
+            "no gaps while offline: {seqs:?}"
+        );
+    }
 }
