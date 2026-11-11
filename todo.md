@@ -73,7 +73,7 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 - [x] VPD calculation via `tpt-eng-props-air` (ASHRAE psychrometrics)
 - [ ] Plant transpiration model for 100 potato plants (leaf area, VPD, light, growth stage). Partial: LAI and light are constant; no growth-stage dependence yet. Calibration of `g_leaf_max` is a guess, not measured
 - [x] Latent and sensible heat load model of the container (envelope R-30+, lighting, equipment)
-- [x] HVAC and dehumidifier energy model; predicted energy cost output (NZ tariff, off-peak aware). Tariff is a placeholder
+- [x] HVAC and dehumidifier energy model; predicted energy cost output (NZ tariff, off-peak aware). Tariff is a required input, not a default (ADR 0014)
 - [x] CLI tool: ingest mock data, simulate, output report (human and JSON)
 - [ ] Determinism: fixed seeds, no wall-clock; identical output across platforms. Fixed seed and golden test pass on Windows. Cross-platform identity is confirmed only when CI's Linux job runs
 - [x] Golden-file tests and property tests (energy books balance, VPD monotonicity). Note: the balance test checks HVAC sign and branch bookkeeping, not the physics
@@ -102,7 +102,7 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 
 ### Edge control loop
 - [ ] Edge daemon: sensor read, state estimate, controller proposal, solver check, actuate, log. Partial: the control cycle is written and tested with fake I/O. The daemon process, real sensor reads and real actuation are not
-- [x] Moisture-driven irrigation controller for a single zone (hysteresis, pulse limit, cooldown; thresholds are placeholders)
+- [x] Moisture-driven irrigation controller for a single zone (hysteresis, pulse limit, cooldown; thresholds come from the site file, ADR 0014)
 - [x] Safe state on solver failure, sensor loss or comms loss (valves close, pump off). Comms loss means the actuator bus; the fleet link is not a safety input (`docs/phase2-edge-loop.md`)
 - [ ] Fault injection: pump fails open, valve sticks, sensor reads stuck or out of range. Partial: pump fail-open, stuck, stale, out-of-range, missing and actuator-error cases tested. A valve stuck open with the pump off is not detectable with the current sensors
 - [ ] Structured local logging and a local event journal. Partial: structured `Event` type and a `Journal` trait. No durable on-disk journal yet
@@ -125,7 +125,7 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 ## Phase 3: Full Stack Integration (wk 13-20)
 
 ### Orchestrator (Go)
-- [x] State machine for the ~120-day grow cycle (stages, transitions, timers, manual overrides). Stage durations are a placeholder template
+- [x] State machine for the ~120-day grow cycle (stages, transitions, timers, manual overrides). Stage durations come from the agreed template; the example is refused
 - [x] Persistent state (file or embedded store with a permissive licence). Atomic JSON file, no database
 - [ ] Crop Profile loader and validator (JSON Schema). Partial: hand-written check of the schema's rules, unknown fields rejected, pump limit checked against the edge contract. Not a full JSON Schema validator
 - [x] MQTT client and profile push to edge nodes; ack, retry and version tracking. Push waits for the matching ack, retries with the same `msg_id`, and records each node's applied profile. Tested over a real broker (mochi-mqtt, in-process). Client is `yosssi/gmq` (ADR 0007, corrected by ADR 0010). The edge side is not on MQTT yet, so this has only been run against a fake edge
@@ -133,9 +133,9 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 - [ ] Lettuce profile v1 and Potato profile v1. Not started: agronomic inputs needed, not invented here
 
 ### Edge (Rust)
-- [ ] MQTT client (permissive licence), TLS and auth. Not started on the edge: `minimq` is chosen (ADR 0006) but not added. TLS and auth are not started
+- [ ] MQTT client (permissive licence), TLS and auth. MQTT done: `minimq` over tokio (ADR 0006, 0013), tested against a real broker (`tests/node_link.rs`). TLS and auth not started (needs a `no_std` TLS crate audited against the policy)
 - [ ] Apply a Crop Profile at runtime: targets feed controllers and contracts (no recompile). Partial: the pump duty setpoint is applied to irrigation and checked by the contract. The LED dimming value is stored, but no LED loop uses it, and the targets do not feed anything yet
-- [ ] Offline operation: continue on the last profile; buffer telemetry to disk; resync on reconnect. Partial: the loop runs without the fleet link (it never needs one). No telemetry buffer yet
+- [ ] Offline operation: continue on the last profile; buffer telemetry to disk; resync on reconnect. Partial: the loop runs without the fleet link (it never needs one). No telemetry buffer yet. The reconnect path is written but not tested under a real outage
 - [x] Profile validation on the edge (reject unsafe or malformed profiles). Own strict JSON parser (ADR 0011). Mirrors the schema's rules, including unknown-field rejection, and reads the pump limit from the shipped contract. A refused profile keeps the previous one active
 
 ### Physics integration
@@ -147,8 +147,8 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 ### Telemetry (Go)
 - [x] `tpt-agripod-telemetry`: ingest from MQTT, batch, back-pressure. Ingest subscribes to `agripod/+/+/telemetry` at QoS 1, drops duplicate `msg_id`s, counts sequence gaps, and skips non-good samples. Tested over a broker. A message is acked when received, not when stored. Crashes are visible as seq gaps
 - [x] Sink interface (pluggable) with file and in-memory sinks for tests (no stdout sink as such; `-out` takes a file path)
-- [ ] Keystone DB sink: Postgres wire protocol, `COPY` bulk path, `USING TIME` (Chronos) table schema. Partial: batched INSERT, transactions and the `USING TIME` DDL are written. No `COPY` (SDK lacks it, ADR 0009). Not run against a live server. SDK not yet imported
-- [ ] Retention and rollup policy for sensor series. Partial: retention is a placeholder parameter in the DDL. No rollup
+- [ ] Keystone DB sink: Postgres wire protocol, `COPY` bulk path, `USING TIME` (Chronos) table schema. Partial: the vendored SDK (pinned, ADR 0009) is wired in with reconnect; writes are batched INSERTs in transactions and idempotent on resend; the schema is written. Not run against a live Keystone yet (`keystone_live_test.go`). No `COPY` (SDK lacks it)
+- [ ] Retention and rollup policy for sensor series. Partial: raw retention is 90 days (ADR 0012), set on the Chronos index. No rollup yet (Phase 5)
 - [x] Dedup and idempotent writes after reconnect. Resent points collide on `(node, metric, ts)` and are skipped. Tested against a fake that enforces the key; live check pending (ADR 0009)
 
 ### Integration
@@ -245,7 +245,7 @@ Maintainer: Solo (TPT Solutions). Licence: **MIT OR Apache-2.0** (dual). Source 
 
 ## Open questions & risks
 - [ ] `tpt-thermodynamics` may not cover EC/pH compensation out of the box (electrolyte crate only; unconfirmed); may need an Agripod-side model or upstream work
-- [ ] Keystone Go client: licence resolved (MIT OR Apache-2.0, stdlib only). Still open: API stability (Keystone is self-described as not production-hardened), the SDK's module path (`github.com/tpt/sdk-go`) not matching its repo, no `COPY`, and no SQLSTATE on errors. See ADR 0009
+- [ ] Keystone Go client: licence resolved (MIT OR Apache-2.0, stdlib only). Still open: API stability (Keystone is self-described as not production-hardened), the module path (resolved by a pinned vendored copy, ADR 0009), no `COPY`, and no SQLSTATE on errors. See ADR 0009
 - [x] Choice of MQTT client and broker that satisfies the licence policy. Decided: edge client `minimq` (ADR 0006); fleet client `gmqtt` and fleet broker `mochi-mqtt/server`, both MIT (ADR 0007). Neither is added to a `Cargo.toml` or `go.mod` yet.
 - [ ] Jetson toolchain and CI runner availability
 - [ ] Compliance and electrical safety requirements (NZ) for the container build

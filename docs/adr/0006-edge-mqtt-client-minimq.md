@@ -1,6 +1,6 @@
 # 0006: Edge MQTT client is minimq, with std-embedded-nal for Linux TCP
 
-Status: Accepted
+Status: Accepted. Refined by ADR 0013 (no std-embedded-nal; the timer queue is specified).
 Date: 2026-11-11
 
 ## Context

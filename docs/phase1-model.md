@@ -57,7 +57,7 @@ CLI or in code.
 | Outdoor RH | 0.70 | Sets the moisture in make-up air | Assumption |
 | COP cooling / heating | 3.0 / 3.0 | Horticultural heat-pump range | Assumption |
 | Dehumidifier MER | 1.2 kg/kWh | Conservative for a horticultural dehumidifier; check the supplier's rating at the right temperature and RH | Assumption |
-| Tariff peak / off-peak | 0.30 / 0.15 NZD/kWh | Placeholder | **Placeholder. Replace with the real tariff.** |
+| Tariff peak / off-peak | Required input (`--tariff-peak`, `--tariff-offpeak`); no default | Site fact. The simulation refuses to run without it (ADR 0014) |
 | Off-peak window | 21:00 to 07:00 local | Common NZ night-rate window | Assumption; confirm with the retailer |
 | Max gap | 900 s | Two missed 5-minute readings | Assumption |
 
@@ -108,7 +108,7 @@ math library. The golden test formats numbers to fixed precision.
    comes with the crop profile in Phase 3.
 6. **Humidity correction in air density** is ignored (about 1 %).
 7. **Daylight saving is ignored.** Use the correct offset per season when reporting costs.
-8. **Tariffs are placeholders.** No demand charges, fixed charges, or GST are modelled.
+8. **Tariffs are inputs, not defaults.** No demand charges, fixed charges, or GST are modelled.
 9. **Humidification** (net moisture deficit) is recorded but not costed.
 10. **CO2 and reservoir temperature** are validated and kept, but no model uses them yet.
 11. **Process load is a measured input.** No lighting or pump model.

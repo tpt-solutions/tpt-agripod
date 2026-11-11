@@ -56,6 +56,13 @@ Checked against the policy in `todo.md` (MIT, BSD-2/3, ISC, Zlib, Unlicense, or 
 | `gopkg.in/yaml.v3` v3.0.1 (Go) | Transitive, via mochi | MIT and Apache-2.0 (dual) | Allowed |
 | `json` 0.12.4 (Rust) | Considered for profile parsing | MIT/Apache-2.0, but RUSTSEC-2022-0081 (unmaintained, soundness issue) | **Denied** (ADR 0011) |
 | `serde_json` / `miniserde` (Rust) | Considered for profile parsing | MIT OR Apache-2.0, but depend on `ryu` (Apache-2.0 OR BSL-1.0) | **Denied** (ADR 0011) |
+| `minimq` 0.13.5 (Rust) | Edge MQTT client (ADR 0006, 0013) | MIT OR Apache-2.0 | Allowed. Default features off (no defmt) |
+| `embassy-time` 0.5 (Rust) | Timer queue for minimq | MIT OR Apache-2.0 | Allowed. `std` and `generic-queue-64` features (ADR 0013) |
+| `embedded-io-adapters` 0.7 (Rust) | Adapts tokio TcpStream to minimq's transport traits | MIT OR Apache-2.0 | Allowed. Version 0.7 matches embedded-io-async 0.7 |
+| `tokio` 1 (Rust) | Runtime for the edge node | MIT | Allowed. Features: rt, net, time, macros, io-util, sync |
+| `getrandom` 0.3 (Rust) | Random source for message UUIDs | MIT OR Apache-2.0 | Allowed |
+| Vendored Keystone Go SDK (`fleet/third_party/keystone-sdk-go`, commit `53e2017`) | Telemetry writes to Keystone | MIT OR Apache-2.0 (LICENSE-MIT, LICENSE-APACHE in the copy). go-licenses reads it as Apache-2.0 alone, so the CI licence job excludes it by name, with the reason in `ci.yml` | Allowed (dual). Reviewed here |
+| `mochi-mqtt/server` (Go) test broker `fleet/testbroker` | Integration tests and CI | MIT | Allowed |
 | Keystone Go SDK (`tpt-keystone-db/sdk-go`) | Telemetry writes to Keystone (ADR 0009) | Standard library only. Root licence `LICENSE-MIT` and `LICENSE-APACHE` (GitHub reports NOASSERTION) | Allowed. Not yet imported |
 | `eclipse/paho.mqtt.golang` (Go) | Considered, not used | EPL-2.0 / EDL-1.0 | **Excluded** by policy (ADR 0010) |
 

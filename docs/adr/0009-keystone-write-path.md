@@ -50,7 +50,6 @@ not resolve.
 - Timestamps are sent as RFC 3339 text parameters. Whether the server coerces text into
   `TIMESTAMPTZ` is not confirmed. The live test must confirm it, or the sink will need
   `CAST($n AS TIMESTAMPTZ)`.
-- Retention is set on the `USING TIME` index. The value is a placeholder until the retention
-  policy is decided.
+- Retention is set on the `USING TIME` index. Retention is decided in ADR 0012.
 - Follow-up: a live integration test against a Keystone instance, run in CI with a service
   container.

@@ -19,6 +19,9 @@ Status values: `Proposed`, `Accepted`, `Superseded by NNNN`.
 | [0009](0009-keystone-write-path.md) | Keystone write path: batched INSERT now, COPY after the SDK gains it | Accepted |
 | [0010](0010-fleet-mqtt-client-correction.md) | Fleet MQTT client is yosssi/gmq; gmqtt is broker-only (corrects ADR 0007) | Accepted |
 | [0011](0011-edge-json-parser.md) | Edge profile parsing uses an in-house strict JSON parser | Accepted |
+| [0012](0012-raw-retention-90-days.md) | Raw sensor retention is 90 days | Accepted |
+| [0013](0013-edge-mqtt-over-tokio.md) | Edge MQTT runs minimq over tokio, with embassy-time's generic timer queue | Accepted |
+| [0014](0014-site-config-no-defaults.md) | Site-specific values come from a site file, with no defaults | Accepted |
 
 ## Template
 

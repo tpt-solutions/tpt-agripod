@@ -29,17 +29,17 @@ The fleet link. The spec requires the edge to run offline, so losing the cloud c
 not stop irrigation or trigger safe state. The actuator bus is different: if commands cannot be
 delivered, the loop goes to safe state.
 
-## Placeholders to replace before a field trial
+## Site values: from the site file, with no defaults (ADR 0014)
 
 | Value | Where | Basis |
 |---|---|---|
-| Moisture thresholds 35 % / 45 % | `IrrigationPolicy` | Assumption for the pumice/coir blend. Calibrate against the sensor |
-| Pulse 60 s, cooldown 900 s | `IrrigationPolicy` | Assumption. Sets the water bound (about 66 open cycles per 10,000 s) |
-| Valve open 10 s per cycle, pump duty 0.12 | `IrrigationPolicy` | Assumption. Must stay under the contract limits (0.15 and 900 s) |
-| Drain limit 2 L per cycle | `LoopConfig` | Assumption. Set from the reservoir's normal evaporation and draw |
+| Moisture thresholds (example 35 % / 45 %) | site file `irrigation` | Calibrate against the sensor for the pumice/coir blend |
+| Pulse, cooldown (example 60 s, 900 s) | site file `irrigation` | Sets the water bound (about 66 open cycles per 10,000 s at the example values) |
+| Cycle time and pump duty (example 10 s, 0.12) | site file `irrigation` | Must stay under the valve limit and the pump contract (0.15). Validated at load |
+| Drain limit (example 2 L per cycle) | site file `drain_limit_l` | Set from the reservoir's normal evaporation and draw |
 | Sensor max age 30 s, stuck after 6 cycles | `ControlLoop::new` | Assumption. Needs the real sensor's sample rate |
-| Solenoid `valve_open_s <= 900` | `edge/contracts/solenoid.contract` | **Placeholder.** Confirm against the flood study |
-| LED headroom `> 500 W` | `edge/contracts/led.contract` | **Placeholder** |
+| Valve open-time limit (example 900 s) | site file `limits.valve_open_max_s`, rendered into `solenoid.contract` | From the flood study. Required, no default |
+| LED headroom threshold (example 500 W) | site file `limits.led_headroom_min_w`, rendered into `led.contract` | From the supply rating. Required, no default |
 | Pump headroom `> 2000 W` and reservoir `> 50 L` | `edge/contracts/pump.contract` | From spec section 4.2 |
 
 ## Limits
