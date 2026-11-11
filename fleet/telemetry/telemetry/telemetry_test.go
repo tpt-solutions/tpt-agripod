@@ -299,7 +299,7 @@ func (f *fakeKeystone) Exec(_ context.Context, sql string, args ...any) (int64, 
 
 func TestKeystoneSinkStoresOnceWhenTheSameBatchIsResent(t *testing.T) {
 	ks := newFakeKeystone()
-	sink, err := NewKeystoneSink(ks, 500)
+	sink, err := NewKeystoneSink(ks, SeriesTable, 500)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -323,7 +323,7 @@ func TestKeystoneSinkStoresOnceWhenTheSameBatchIsResent(t *testing.T) {
 func TestKeystoneSinkRaisesOtherErrorsWithoutTheDuplicatePath(t *testing.T) {
 	ks := newFakeKeystone()
 	ks.failNext = errors.New("connection reset by peer")
-	sink, _ := NewKeystoneSink(ks, 500)
+	sink, _ := NewKeystoneSink(ks, SeriesTable, 500)
 	err := sink.Write(context.Background(), []Point{pt("n", "m", 0)})
 	if err == nil || IsDuplicate(err) {
 		t.Fatalf("expected a plain error, got %v", err)
@@ -335,7 +335,7 @@ func TestKeystoneSinkRaisesOtherErrorsWithoutTheDuplicatePath(t *testing.T) {
 
 func TestKeystoneSinkChunksLargeBatches(t *testing.T) {
 	ks := newFakeKeystone()
-	sink, _ := NewKeystoneSink(ks, 500)
+	sink, _ := NewKeystoneSink(ks, SeriesTable, 500)
 	batch := make([]Point, 1200)
 	for i := range batch {
 		batch[i] = pt("n", "m", i)
@@ -349,16 +349,16 @@ func TestKeystoneSinkChunksLargeBatches(t *testing.T) {
 }
 
 func TestKeystoneSinkRejectsBadChunkSizes(t *testing.T) {
-	if _, err := NewKeystoneSink(newFakeKeystone(), 0); err == nil {
+	if _, err := NewKeystoneSink(newFakeKeystone(), SeriesTable, 0); err == nil {
 		t.Error("maxRows 0 accepted")
 	}
-	if _, err := NewKeystoneSink(newFakeKeystone(), 16_001); err == nil {
+	if _, err := NewKeystoneSink(newFakeKeystone(), SeriesTable, 16_001); err == nil {
 		t.Error("maxRows above the parameter limit accepted")
 	}
 }
 
 func TestInsertSQLNumbersEveryParameter(t *testing.T) {
-	got := insertSQL(2)
+	got := insertSQL(SeriesTable, 2)
 	want := "INSERT INTO sensor_series (node, metric, ts, value) VALUES ($1, $2, $3, $4), ($5, $6, $7, $8)"
 	if got != want {
 		t.Fatalf("got %q\nwant %q", got, want)
@@ -368,7 +368,7 @@ func TestInsertSQLNumbersEveryParameter(t *testing.T) {
 func TestBatcherIntoKeystoneSurvivesATransientInsertFailure(t *testing.T) {
 	ks := newFakeKeystone()
 	ks.failNext = errors.New("timeout waiting for lock")
-	sink, _ := NewKeystoneSink(ks, 500)
+	sink, _ := NewKeystoneSink(ks, SeriesTable, 500)
 	cfg := fastConfig()
 	cfg.MaxAttempts = 3
 	b, err := NewBatcher(context.Background(), sink, cfg)
@@ -387,7 +387,10 @@ func TestBatcherIntoKeystoneSurvivesATransientInsertFailure(t *testing.T) {
 }
 
 func TestSchemaStatementsCarryTheRetentionPolicy(t *testing.T) {
-	stmts := SchemaStatements("90 days")
+	stmts, err := SchemaStatements(SeriesTable, "90 days")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(stmts) != 2 {
 		t.Fatalf("got %d statements", len(stmts))
 	}

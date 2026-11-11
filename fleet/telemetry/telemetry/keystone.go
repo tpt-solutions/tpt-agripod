@@ -4,23 +4,37 @@ package telemetry
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
 // Executor runs one SQL statement with positional parameters and reports rows affected.
-// The Keystone SDK's Conn satisfies this through a small adapter (see ADR 0009), so this package
-// does not import the SDK and does not depend on its module path.
+// KeystoneSession implements it over the TPT Keystone SDK (keystone_sdk.go).
 type Executor interface {
 	Exec(ctx context.Context, sql string, args ...any) (rowsAffected int64, err error)
 }
 
-// SeriesTable is the Keystone table that holds sensor points.
+// SeriesTable is the default Keystone table for sensor points.
 const SeriesTable = "sensor_series"
 
-// SchemaStatements are run once by the operator, not by the sink. Retention is set on the
-// Chronos (USING TIME) index. The value is a placeholder until the retention policy is decided.
-func SchemaStatements(retention string) []string {
+// DefaultRetention is how long raw points are kept on the Chronos index (ADR 0012).
+const DefaultRetention = "90 days"
+
+// tableName is the only form accepted for a table name. The name is placed in SQL text, so it is
+// checked before use.
+var tableName = regexp.MustCompile(`^[a-z_][a-z0-9_]{0,62}$`)
+
+// SchemaStatements returns the DDL for a series table: the table keyed on (node, metric, ts), and
+// its Chronos (USING TIME) index with the given retention.
+func SchemaStatements(table, retention string) ([]string, error) {
+	if !tableName.MatchString(table) {
+		return nil, fmt.Errorf("telemetry: table name %q is not a plain identifier", table)
+	}
+	if retention == "" || strings.ContainsAny(retention, "'\\") {
+		return nil, fmt.Errorf("telemetry: retention %q is not a plain interval", retention)
+	}
 	return []string{
 		fmt.Sprintf(`CREATE TABLE %s (
   node TEXT NOT NULL,
@@ -28,10 +42,10 @@ func SchemaStatements(retention string) []string {
   ts TIMESTAMPTZ NOT NULL,
   value FLOAT8 NOT NULL,
   PRIMARY KEY (node, metric, ts)
-)`, SeriesTable),
+)`, table),
 		fmt.Sprintf(`CREATE INDEX ON %s USING TIME(ts) WITH (interval = '1 hour', retention = '%s', value = 'value')`,
-			SeriesTable, retention),
-	}
+			table, retention),
+	}, nil
 }
 
 // KeystoneSink writes batches to TPT Keystone.
@@ -43,19 +57,26 @@ func SchemaStatements(retention string) []string {
 // the batcher retries them.
 //
 // COPY is not used yet. The server supports COPY FROM STDIN, but the Go SDK has no COPY
-// sub-protocol. Adding it to the SDK is the path to bulk ingest.
+// sub-protocol. Adding it to the SDK is the path to bulk ingest (ADR 0009).
 type KeystoneSink struct {
 	ex      Executor
+	table   string
 	maxRows int
 }
 
-// NewKeystoneSink returns a sink that writes at most maxRows points per INSERT.
+// NewKeystoneSink returns a sink that writes at most maxRows points per INSERT into table.
 // Each row uses four parameters, so maxRows must keep 4*maxRows under the protocol's 65535 limit.
-func NewKeystoneSink(ex Executor, maxRows int) (*KeystoneSink, error) {
+func NewKeystoneSink(ex Executor, table string, maxRows int) (*KeystoneSink, error) {
+	if !tableName.MatchString(table) {
+		return nil, fmt.Errorf("telemetry: table name %q is not a plain identifier", table)
+	}
 	if maxRows < 1 || maxRows > 16_000 {
 		return nil, fmt.Errorf("telemetry: maxRows %d out of range 1..16000", maxRows)
 	}
-	return &KeystoneSink{ex: ex, maxRows: maxRows}, nil
+	if ex == nil {
+		return nil, errors.New("telemetry: keystone sink needs an executor")
+	}
+	return &KeystoneSink{ex: ex, table: table, maxRows: maxRows}, nil
 }
 
 const duplicateMarker = "duplicate key value violates unique constraint"
@@ -83,7 +104,7 @@ func (k *KeystoneSink) writeChunk(ctx context.Context, chunk []Point) error {
 	if _, err := k.ex.Exec(ctx, "BEGIN"); err != nil {
 		return fmt.Errorf("telemetry: begin: %w", err)
 	}
-	_, err := k.ex.Exec(ctx, insertSQL(len(chunk)), insertArgs(chunk)...)
+	_, err := k.ex.Exec(ctx, insertSQL(k.table, len(chunk)), insertArgs(chunk)...)
 	if err == nil {
 		if _, cerr := k.ex.Exec(ctx, "COMMIT"); cerr != nil {
 			return fmt.Errorf("telemetry: commit: %w", cerr)
@@ -100,7 +121,7 @@ func (k *KeystoneSink) writeChunk(ctx context.Context, chunk []Point) error {
 
 func (k *KeystoneSink) writeRowsSkippingDuplicates(ctx context.Context, chunk []Point) error {
 	for _, p := range chunk {
-		_, err := k.ex.Exec(ctx, insertSQL(1), insertArgs([]Point{p})...)
+		_, err := k.ex.Exec(ctx, insertSQL(k.table, 1), insertArgs([]Point{p})...)
 		if err != nil && !IsDuplicate(err) {
 			return fmt.Errorf("telemetry: insert point %s/%s: %w", p.Node, p.Metric, err)
 		}
@@ -108,9 +129,9 @@ func (k *KeystoneSink) writeRowsSkippingDuplicates(ctx context.Context, chunk []
 	return nil
 }
 
-func insertSQL(rows int) string {
+func insertSQL(table string, rows int) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "INSERT INTO %s (node, metric, ts, value) VALUES ", SeriesTable)
+	fmt.Fprintf(&b, "INSERT INTO %s (node, metric, ts, value) VALUES ", table)
 	for i := range rows {
 		if i > 0 {
 			b.WriteString(", ")
